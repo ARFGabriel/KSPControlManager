@@ -23,8 +23,15 @@ class TelemetrySource(ABC):
 
     @abstractmethod
     def sample(self) -> Telemetry:
-        """Renvoie l'etat courant. Ne doit jamais lever : en cas de probleme,
-        renvoyer un Telemetry avec connected=False et le champ error rempli."""
+        """Renvoie l'etat courant.
+
+        Un probleme de *donnees* (pas de vaisseau actif, champ indisponible
+        dans la scene courante) ne doit pas lever : on renvoie un Telemetry
+        avec le champ error rempli.
+
+        Une rupture de *liaison*, elle, doit lever : c'est au hub de fermer la
+        source et de relancer la detection. Sans cela une source morte resterait
+        en place indefiniment, a renvoyer des zeros."""
 
     @abstractmethod
     def close(self) -> None:

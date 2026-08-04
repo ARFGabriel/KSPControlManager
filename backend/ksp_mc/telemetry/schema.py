@@ -58,6 +58,7 @@ class Telemetry:
     timestamp: float = 0.0           # horloge murale du backend
     ut: float = 0.0                  # temps universel du jeu
     met: float = 0.0                 # temps ecoule depuis le decollage
+    game_scene: str = ""             # flight, space_center, editor_vab...
 
     # --- identite ---
     vessel_name: str = ""
@@ -68,7 +69,11 @@ class Telemetry:
     # --- vol ---
     altitude: float = 0.0            # m au-dessus du niveau de la mer
     surface_altitude: float = 0.0    # m au-dessus du relief
-    speed: float = 0.0               # m/s
+    # Deux vitesses, comme la navball du jeu. La vitesse surface est mesuree
+    # dans le repere tournant avec le corps : elle n'a de sens qu'a basse
+    # altitude. En orbite ou en interplanetaire, seule l'orbitale est valable.
+    speed: float = 0.0               # m/s, relative a la surface
+    orbital_speed: float = 0.0       # m/s, repere non tournant
     vertical_speed: float = 0.0      # m/s
     g_force: float = 0.0
     dynamic_pressure: float = 0.0    # Pa
@@ -88,6 +93,10 @@ class Telemetry:
     twr: float = 0.0
     delta_v: float = 0.0             # m/s, total, situation courante
     vacuum_delta_v: float = 0.0      # m/s, total
+    # KSP ne calcule pas toujours le delta-v (affichage desactive, vaisseau
+    # sans moteur, vaisseau tout juste charge). On distingue explicitement
+    # "indisponible" de "zero" : afficher 0 m/s serait un mensonge.
+    delta_v_available: bool = False
     current_stage: int = 0
 
     # --- detail ---
@@ -96,6 +105,10 @@ class Telemetry:
     orbit: OrbitInfo | None = None
 
     # --- liaison ---
+    # comm_available distingue "CommNet desactive ou vaisseau sans antenne"
+    # de "liaison coupee". La radio devra s'appuyer la-dessus : sans CommNet,
+    # pas de contrainte de signal a simuler.
+    comm_available: bool = False
     comm_can_communicate: bool = True
     comm_signal_strength: float = 1.0   # 0..1
 

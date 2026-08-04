@@ -36,6 +36,7 @@ export interface Telemetry {
   timestamp: number;
   ut: number;
   met: number;
+  game_scene: string;
 
   vessel_name: string;
   situation: string;
@@ -45,6 +46,7 @@ export interface Telemetry {
   altitude: number;
   surface_altitude: number;
   speed: number;
+  orbital_speed: number;
   vertical_speed: number;
   g_force: number;
   dynamic_pressure: number;
@@ -63,12 +65,14 @@ export interface Telemetry {
   twr: number;
   delta_v: number;
   vacuum_delta_v: number;
+  delta_v_available: boolean;
   current_stage: number;
 
   stages: StageInfo[];
   resources: ResourceInfo[];
   orbit: OrbitInfo | null;
 
+  comm_available: boolean;
   comm_can_communicate: boolean;
   comm_signal_strength: number;
 }

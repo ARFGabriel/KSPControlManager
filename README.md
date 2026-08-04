@@ -71,18 +71,52 @@ jeu sans qu'on ait à redémarrer quoi que ce soit.
 
 Valeurs possibles : `auto`, `krpc` (jeu uniquement), `sim` (simulateur forcé).
 
+## La radio
+
+Deux interlocuteurs, aux pouvoirs volontairement différents :
+
+- **Le sol** (Kerbal Space Center) voit toute la télémétrie mais ne dispose
+  d'**aucun outil**. Il conseille, calcule, alerte. Il lui est structurellement
+  impossible de déclencher une action à bord.
+- **L'équipage** est le seul à pouvoir agir : pilotage, systèmes de bord,
+  science, étagement.
+
+Les commandes irréversibles (`activate_stage`, `deploy_parachutes`) ne partent
+jamais sans confirmation explicite du pilote : la conversation se met en pause
+et attend.
+
+Le fournisseur de modèle est configurable (`LLM_PROVIDER`). Gemini est actif,
+Claude est écrit et prêt. La liste des modèles acceptés par ta clé est
+disponible sur `/api/radio/models`.
+
+## Calcul du Δv par étage
+
+kRPC 0.6.0 n'arrive pas à lire le Δv par étage sur KSP 1.12.5 : toutes les
+propriétés de `Stage` lèvent une erreur alors que le jeu affiche les chiffres.
+Le backend le recalcule donc lui-même, par simulation de la consommation
+(`telemetry/deltav.py`).
+
+Validé contre l'affichage du jeu sur un lanceur à propulseurs latéraux :
+écart nul sur les deux étages propulsifs principaux, 0,6 % sur le total.
+Les coiffes ne sont pas encore modélisées, d'où ~5 % d'écart sur l'étage
+supérieur. L'asparagus staging avec conduites de carburant n'est pas géré.
+
 ## Sécurité des clés API
 
 Aucune clé n'est écrite dans le code. Le backend les lit depuis `backend/.env`,
 et le mod depuis `GameData/AIAssistant/apikey.txt`. Ces deux fichiers sont
-ignorés par git.
+ignorés par git. **`backend/.env.example` est versionné : n'y mets jamais de
+vraie clé.**
 
 ## État d'avancement
 
+- [x] Mod kRPC installé dans KSP 1.12.5
 - [x] Couche télémétrie (kRPC + simulateur)
-- [x] Dashboard temps réel V1
-- [ ] Mod kRPC installé dans KSP
-- [ ] Radio : sol et équipage, avec exécution de commandes
+- [x] Dashboard temps réel
+- [x] Calcul du Δv par étage
+- [x] Radio : sol et équipage, avec exécution de commandes
+- [ ] Commandes validées sur un vol réel
+- [ ] Radio vocale
 - [ ] Planificateur de mission (fenêtres de tir, transferts)
 - [ ] Aide à la construction dans le VAB
 - [ ] Pilote automatique

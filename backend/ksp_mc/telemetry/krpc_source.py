@@ -14,6 +14,7 @@ import time
 
 import krpc
 
+from . import deltav
 from .schema import OrbitInfo, ResourceInfo, StageInfo, Telemetry
 from .source import TelemetrySource, safe
 
@@ -22,8 +23,15 @@ from .source import TelemetrySource, safe
 KG_TO_T = 1e-3
 N_TO_KN = 1e-3
 
-# Periode de rafraichissement des donnees lourdes (etages, ressources).
+# Periode de rafraichissement des donnees lourdes (ressources, equipage).
 COLD_REFRESH_S = 1.0
+
+# Le detail par etage est recalcule par nos soins (voir deltav.py) et coute
+# environ 250 ms : 130 ms de lecture des 48 pieces, 120 ms de simulation.
+# Beaucoup trop pour le cycle de telemetrie a 10 Hz, d'ou cette cadence a
+# part. Un changement d'etage force un recalcul immediat, car c'est justement
+# le moment ou les chiffres changent du tout au tout.
+STAGE_REFRESH_S = 5.0
 
 
 class KrpcSource(TelemetrySource):
@@ -45,10 +53,17 @@ class KrpcSource(TelemetrySource):
         self._vessel = None
         self._streams: dict[str, object] = {}
         self._flight = None
+        self._flight_orbital = None
+        self._flight_surface = None
 
         # Cache des donnees lentes
         self._cold_at = 0.0
         self._cold: dict = {}
+
+        # Cache du detail par etage, rafraichi a sa propre cadence
+        self._stages: list[StageInfo] = []
+        self._stages_at = 0.0
+        self._stages_stage: int | None = None
 
     # ------------------------------------------------------------------
     # Connexion
@@ -81,6 +96,8 @@ class KrpcSource(TelemetrySource):
                 pass
         self._streams.clear()
         self._flight = None
+        self._flight_orbital = None
+        self._flight_surface = None
         self._vessel = None
 
     def _add(self, key: str, obj, attr: str) -> None:
@@ -97,10 +114,23 @@ class KrpcSource(TelemetrySource):
 
         sc = self.conn.space_center
         body = vessel.orbit.body
-        # Repere de reference lie a la surface du corps survole : c'est celui
-        # qui donne la vitesse "surface" affichee par le jeu au decollage.
-        frame = body.reference_frame
-        self._flight = vessel.flight(frame)
+
+        # Trois reperes, parce qu'aucun ne mesure tout correctement :
+        #
+        #  - body.reference_frame TOURNE avec l'astre. Il donne la vitesse
+        #    "surface" du jeu, ainsi que l'altitude et les grandeurs
+        #    atmospheriques. Mais son attitude est fausse (voir plus bas).
+        #  - body.non_rotating_reference_frame donne la vitesse orbitale, la
+        #    seule valable des qu'on s'eloigne : en orbite solaire, la
+        #    rotation du repere ajoute des dizaines de km/s d'artefact.
+        #  - vessel.surface_reference_frame est centre sur le vaisseau et
+        #    oriente zenith/nord/est. C'est LUI qui donne l'assiette, le cap
+        #    et le roulis de la navball. Mesure a l'appui : le cap y vaut 90,7
+        #    la ou le repere de l'astre annonce 269,6, soit 180 d'ecart.
+        #    En revanche il est fixe au vaisseau, donc toute vitesse y vaut 0.
+        self._flight = vessel.flight(body.reference_frame)
+        self._flight_orbital = vessel.flight(body.non_rotating_reference_frame)
+        self._flight_surface = vessel.flight(vessel.surface_reference_frame)
 
         self._add("ut", sc, "ut")
         self._add("met", vessel, "met")
@@ -113,22 +143,19 @@ class KrpcSource(TelemetrySource):
             "g_force",
             "dynamic_pressure",
             "mach",
-            "pitch",
-            "heading",
-            "roll",
             "static_pressure",
             "atmosphere_density",
         ):
             self._add(attr, self._flight, attr)
 
-        for attr in (
-            "thrust",
-            "available_thrust",
-            "mass",
-            "dry_mass",
-            "delta_v",
-            "vacuum_delta_v",
-        ):
+        self._add("orbital_speed", self._flight_orbital, "speed")
+
+        # Attitude : imperativement dans le repere du vaisseau, sinon les trois
+        # angles sont faux.
+        for attr in ("pitch", "heading", "roll"):
+            self._add(attr, self._flight_surface, attr)
+
+        for attr in ("thrust", "available_thrust", "mass", "dry_mass"):
             self._add(attr, vessel, attr)
 
         self._add("throttle", vessel.control, "throttle")
@@ -173,38 +200,41 @@ class KrpcSource(TelemetrySource):
         cold["crew_count"] = safe(lambda: vessel.crew_count, 0)
         cold["surface_gravity"] = safe(lambda: vessel.orbit.body.surface_gravity, 9.81)
 
+        # --- Delta-v ---
+        # Lu ici plutot qu'en stream : KSP peut ne pas l'avoir encore calcule
+        # au moment ou on cree les streams, et un stream absent ne se
+        # recreerait jamais. A 1 Hz on retente en permanence, et le delta-v ne
+        # varie de toute facon qu'a la vitesse de consommation des ergols.
+        try:
+            cold["delta_v"] = vessel.delta_v
+            cold["vacuum_delta_v"] = vessel.vacuum_delta_v
+            cold["delta_v_available"] = True
+        except Exception:
+            cold["delta_v"] = 0.0
+            cold["vacuum_delta_v"] = 0.0
+            cold["delta_v_available"] = False
+
+        # --- CommNet ---
+        # can_communicate leve une NullReferenceException cote serveur quand
+        # CommNet est desactive ou que le vaisseau n'a pas de module de
+        # liaison. On le signale au lieu de faire croire a une liaison
+        # parfaite : la radio devra savoir qu'il n'y a rien a contraindre.
+        cold["comm_available"] = False
+        cold["can_communicate"] = True
+        cold["signal_strength"] = 1.0
         comms = safe(lambda: vessel.comms)
         if comms is not None:
-            cold["can_communicate"] = safe(lambda: comms.can_communicate, True)
-            cold["signal_strength"] = safe(lambda: comms.signal_strength, 1.0)
-        else:
-            # Sondes sans antenne, ou CommNet desactive : on considere la
-            # liaison etablie plutot que de couper la radio a tort.
-            cold["can_communicate"] = True
-            cold["signal_strength"] = 1.0
+            try:
+                cold["can_communicate"] = comms.can_communicate
+                cold["signal_strength"] = comms.signal_strength
+                cold["comm_available"] = True
+            except Exception:
+                pass
 
-        # --- Etages ---
-        stages: list[StageInfo] = []
-        for stage in safe(lambda: vessel.stages, []) or []:
-            number = safe(lambda: stage.number, -1)
-            # Le delta-v n'est defini que sur les etages d'activation ;
-            # les etages de decouplage levent une exception, on les saute.
-            dv = safe(lambda: stage.delta_v)
-            if dv is None:
-                continue
-            stages.append(
-                StageInfo(
-                    number=number,
-                    delta_v=dv,
-                    vacuum_delta_v=safe(lambda: stage.vacuum_delta_v, 0.0),
-                    twr=safe(lambda: stage.twr, 0.0),
-                    burn_time=safe(lambda: stage.burn_time, 0.0),
-                    start_mass=safe(lambda: stage.start_mass, 0.0) * KG_TO_T,
-                    end_mass=safe(lambda: stage.end_mass, 0.0) * KG_TO_T,
-                )
-            )
-        stages.sort(key=lambda s: s.number, reverse=True)
-        cold["stages"] = stages
+        # Le detail par etage n'est PAS lu ici : sur KSP 1.12.5, toutes les
+        # proprietes de Stage levent "Delta-v has not been calculated for this
+        # vessel yet", meme quand le jeu affiche les chiffres a l'ecran. On le
+        # recalcule dans _refresh_stages a partir des pieces.
 
         # --- Ressources ---
         resources: list[ResourceInfo] = []
@@ -223,6 +253,27 @@ class KrpcSource(TelemetrySource):
         self._cold = cold
         self._cold_at = time.monotonic()
 
+    def _refresh_stages(self, vessel, current_stage: int) -> None:
+        """Recalcule le detail par etage, a cadence reduite.
+
+        Valide contre l'affichage du jeu sur un lanceur a propulseurs
+        lateraux : ecart nul sur les deux etages propulsifs principaux,
+        0,6 % sur le total.
+        """
+        now = time.monotonic()
+        stale = now - self._stages_at > STAGE_REFRESH_S
+        staged = self._stages_stage != current_stage
+        if not (stale or staged or not self._stages):
+            return
+
+        try:
+            parts, densities = deltav.snapshot(vessel)
+            self._stages = deltav.compute_stages(parts, densities, current_stage)
+        except Exception:
+            self._stages = []
+        self._stages_stage = current_stage
+        self._stages_at = now
+
     # ------------------------------------------------------------------
     # Echantillonnage
     # ------------------------------------------------------------------
@@ -230,16 +281,25 @@ class KrpcSource(TelemetrySource):
         if self.conn is None:
             return Telemetry(connected=False, source=self.name, error="Non connecte")
 
-        try:
-            vessel = self.conn.space_center.active_vessel
-        except Exception as exc:
-            # Cas normal : on est au centre spatial, dans le VAB, ou en
-            # transition de scene. Pas d'erreur a afficher en rouge.
+        # Cette lecture sert aussi de test de vie de la liaison : si elle leve,
+        # c'est que le jeu a ete ferme ou le serveur arrete. On laisse alors
+        # l'exception remonter au hub, qui relancera la detection.
+        scene = _enum_name(self.conn.krpc.current_game_scene)
+
+        # Attention : hors de la scene de vol, active_vessel renvoie None au
+        # lieu de lever. Sans ce test explicite, on construirait la telemetrie
+        # sur un objet nul et le dashboard afficherait des zeros credibles.
+        vessel = self.conn.space_center.active_vessel
+        if vessel is None:
+            if self._vessel is not None:
+                self._drop_streams()
             return Telemetry(
                 connected=True,
                 source=self.name,
-                error="Aucun vaisseau actif",
+                game_scene=scene,
+                error=_no_vessel_message(scene),
                 timestamp=time.time(),
+                ut=safe(lambda: self.conn.space_center.ut, 0.0),
             )
 
         try:
@@ -252,21 +312,39 @@ class KrpcSource(TelemetrySource):
             return Telemetry(
                 connected=True,
                 source=self.name,
+                game_scene=scene,
                 error=f"Erreur de lecture : {exc}",
                 timestamp=time.time(),
             )
 
         cold = self._cold
+        current_stage = int(self._get("current_stage", 0))
+        self._refresh_stages(vessel, current_stage)
+
         mass_t = self._get("mass") * KG_TO_T
         available_thrust_kn = self._get("available_thrust") * N_TO_KN
         gravity = cold.get("surface_gravity", 9.81)
         weight_kn = mass_t * gravity  # t * m/s2 = kN
         twr = available_thrust_kn / weight_kn if weight_kn > 0 else 0.0
 
+        # Delta-v total : on prefere la valeur du jeu quand elle existe, sinon
+        # la somme de notre propre calcul par etage. Les deux concordent a
+        # 0,6 % pres, mais celle du jeu fait foi.
+        if cold.get("delta_v_available"):
+            dv_total = cold.get("delta_v", 0.0)
+            dv_available = True
+        elif self._stages:
+            dv_total = deltav.total_delta_v(self._stages)
+            dv_available = True
+        else:
+            dv_total = 0.0
+            dv_available = False
+
         return Telemetry(
             connected=True,
             source=self.name,
             timestamp=time.time(),
+            game_scene=scene,
             ut=self._get("ut"),
             met=self._get("met"),
             vessel_name=cold.get("vessel_name", ""),
@@ -276,6 +354,7 @@ class KrpcSource(TelemetrySource):
             altitude=self._get("mean_altitude"),
             surface_altitude=self._get("surface_altitude"),
             speed=self._get("speed"),
+            orbital_speed=self._get("orbital_speed"),
             vertical_speed=self._get("vertical_speed"),
             g_force=self._get("g_force"),
             dynamic_pressure=self._get("dynamic_pressure"),
@@ -291,10 +370,11 @@ class KrpcSource(TelemetrySource):
             mass=mass_t,
             dry_mass=self._get("dry_mass") * KG_TO_T,
             twr=twr,
-            delta_v=self._get("delta_v"),
-            vacuum_delta_v=self._get("vacuum_delta_v"),
-            current_stage=int(self._get("current_stage", 0)),
-            stages=cold.get("stages", []),
+            delta_v=dv_total,
+            vacuum_delta_v=cold.get("vacuum_delta_v", 0.0),
+            delta_v_available=dv_available,
+            current_stage=current_stage,
+            stages=self._stages,
             resources=cold.get("resources", []),
             orbit=OrbitInfo(
                 body=cold.get("body", ""),
@@ -307,6 +387,7 @@ class KrpcSource(TelemetrySource):
                 time_to_periapsis=self._get("orbit_time_to_periapsis"),
                 semi_major_axis=self._get("orbit_semi_major_axis"),
             ),
+            comm_available=cold.get("comm_available", False),
             comm_can_communicate=cold.get("can_communicate", True),
             comm_signal_strength=cold.get("signal_strength", 1.0),
         )
@@ -317,3 +398,19 @@ def _enum_name(value) -> str:
     if value is None:
         return ""
     return str(getattr(value, "name", value))
+
+
+# Sans vaisseau actif, le message doit dire ou on se trouve : c'est une
+# information, pas une panne.
+_SCENE_MESSAGES = {
+    "space_center": "Au centre spatial — aucun vaisseau en vol",
+    "editor_vab": "Dans le VAB",
+    "editor_sph": "Dans le hangar (SPH)",
+    "tracking_station": "Station de suivi",
+    "main_menu": "Menu principal — aucune partie chargee",
+    "flight": "Vaisseau en cours de chargement",
+}
+
+
+def _no_vessel_message(scene: str) -> str:
+    return _SCENE_MESSAGES.get(scene, "Aucun vaisseau actif")

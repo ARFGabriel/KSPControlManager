@@ -322,6 +322,7 @@ class SimSource(TelemetrySource):
             connected=True,
             source=self.name,
             timestamp=time.time(),
+            game_scene="flight",
             ut=self.ut,
             met=self.met,
             vessel_name="Simulateur MC-1",
@@ -331,6 +332,9 @@ class SimSource(TelemetrySource):
             altitude=self.alt,
             surface_altitude=self.alt,
             speed=surface_speed,
+            # vx est deja mesure dans le repere inertiel : la vitesse orbitale
+            # est donc la norme brute, sans retrancher la rotation du sol.
+            orbital_speed=math.hypot(self.vx, self.vy),
             vertical_speed=self.vy,
             g_force=(thrust_kn * 1000.0 / (mass_t * 1000.0)) / G0 if mass_t else 0.0,
             dynamic_pressure=q,
@@ -348,6 +352,7 @@ class SimSource(TelemetrySource):
             twr=twr,
             delta_v=total_dv,
             vacuum_delta_v=total_dv_vac,
+            delta_v_available=True,
             current_stage=self.active,
             stages=stages_info,
             resources=[
@@ -361,6 +366,7 @@ class SimSource(TelemetrySource):
                 ResourceInfo(name="ElectricCharge", amount=180.0, maximum=200.0),
             ],
             orbit=orbit,
+            comm_available=True,
             comm_can_communicate=True,
             comm_signal_strength=max(0.2, 1.0 - self.alt / 4_000_000.0),
         )

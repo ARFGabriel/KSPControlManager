@@ -1,5 +1,6 @@
 import { AttitudeIndicator } from "./components/AttitudeIndicator";
 import { OrbitDiagram } from "./components/OrbitDiagram";
+import { RadioPanel } from "./components/RadioPanel";
 import { Badge, Bar, Panel, Stat } from "./components/ui";
 import * as f from "./format";
 import type { Telemetry } from "./types";
@@ -23,11 +24,24 @@ export default function App() {
         <div className="banner info">{telemetry.error}</div>
       )}
 
-      {telemetry ? (
+      {/* Sans vaisseau actif, tous les compteurs vaudraient zero : mieux vaut
+          un ecran d'attente explicite qu'un tableau de bord qui ment. */}
+      {telemetry && telemetry.vessel_name ? (
         <Dashboard t={telemetry} />
       ) : (
-        <div className="empty" style={{ paddingTop: 60 }}>
-          En attente de la première trame de télémétrie…
+        <div style={{ maxWidth: 620, margin: "0 auto", padding: 12 }}>
+          <div className="empty" style={{ paddingTop: 40, fontSize: 14 }}>
+            {telemetry
+              ? "Aucun vaisseau à suivre pour le moment."
+              : "En attente de la première trame de télémétrie…"}
+            <br />
+            <span style={{ fontSize: 12 }}>
+              Le tableau de bord s'activera dès le passage en vol.
+            </span>
+          </div>
+          {/* La radio reste ouverte hors vol : on doit pouvoir préparer
+              une mission avec le sol depuis le centre spatial. */}
+          <RadioPanel />
         </div>
       )}
     </>
@@ -58,11 +72,14 @@ function TopBar({
         </Badge>
       )}
 
-      {t && (
-        <Badge tone={t.comm_can_communicate ? (signal > 30 ? "ok" : "warn") : "bad"}>
-          {t.comm_can_communicate ? `Liaison ${signal} %` : "Pas de liaison"}
-        </Badge>
-      )}
+      {t &&
+        (t.comm_available ? (
+          <Badge tone={t.comm_can_communicate ? (signal > 30 ? "ok" : "warn") : "bad"}>
+            {t.comm_can_communicate ? `Liaison ${signal} %` : "Pas de liaison"}
+          </Badge>
+        ) : (
+          <Badge tone="info">CommNet inactif</Badge>
+        ))}
 
       <Badge tone={t?.source === "krpc" ? "ok" : t?.source === "sim" ? "warn" : "bad"}>
         {t?.source === "krpc"
@@ -93,7 +110,8 @@ function Dashboard({ t }: { t: Telemetry }) {
 
         <Panel title="Vol">
           <Stat label="Altitude" value={f.distance(t.altitude)} tone="big" />
-          <Stat label="Vitesse" value={f.speed(t.speed)} tone="big" />
+          <Stat label="Vitesse orbitale" value={f.speed(t.orbital_speed)} tone="big" />
+          <Stat label="Vitesse surface" value={f.speed(t.speed)} />
           <Stat label="Sol" value={f.distance(t.surface_altitude)} />
           <Stat
             label="Vitesse verticale"
@@ -140,6 +158,8 @@ function Dashboard({ t }: { t: Telemetry }) {
           )}
         </Panel>
 
+        <RadioPanel />
+
         <Panel title="Ressources">
           {t.resources.length > 0 ? (
             t.resources.map((r) => (
@@ -177,8 +197,18 @@ function Dashboard({ t }: { t: Telemetry }) {
           />
           <Stat label="Masse" value={`${f.num(t.mass, 2)} t`} />
           <Stat label="Masse à vide" value={`${f.num(t.dry_mass, 2)} t`} />
-          <Stat label="Δv total" value={`${f.num(t.delta_v, 0)} m/s`} tone="big" />
-          <Stat label="Δv sous vide" value={`${f.num(t.vacuum_delta_v, 0)} m/s`} />
+          {/* Δv non calculé par KSP : on l'écrit, plutôt que d'afficher 0. */}
+          <Stat
+            label="Δv total"
+            value={t.delta_v_available ? `${f.num(t.delta_v, 0)} m/s` : "indisponible"}
+            tone={t.delta_v_available ? "big" : ""}
+          />
+          <Stat
+            label="Δv sous vide"
+            value={
+              t.delta_v_available ? `${f.num(t.vacuum_delta_v, 0)} m/s` : "—"
+            }
+          />
         </Panel>
 
         <Panel title="Étages" extra={<span>actuel : {t.current_stage}</span>}>

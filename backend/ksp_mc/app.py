@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import PROJECT_DIR, settings
 from .hub import hub
+from .radio.service import radio
 
 logging.basicConfig(
     level=logging.INFO,
@@ -74,6 +75,68 @@ async def ws_telemetry(websocket: WebSocket) -> None:
         log.debug("Client WebSocket deconnecte", exc_info=True)
     finally:
         hub.unsubscribe(queue)
+
+
+@app.get("/api/radio/status")
+async def radio_status() -> dict:
+    return radio.status()
+
+
+@app.get("/api/radio/models")
+async def radio_models() -> dict:
+    """Modeles utilisables avec la cle configuree.
+
+    Sert a sortir d'une erreur 404 sans deviner : les noms de modeles changent
+    au fil des versions de l'API.
+    """
+    from .radio.llm.gemini import list_models
+
+    if not settings.gemini_api_key:
+        return {"error": "Aucune cle Gemini dans backend/.env"}
+    try:
+        return {"models": await list_models(settings.gemini_api_key)}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@app.websocket("/ws/radio")
+async def ws_radio(websocket: WebSocket) -> None:
+    await websocket.accept()
+    queue = radio.subscribe()
+
+    async def pump() -> None:
+        """Pousse les evenements de la radio vers ce navigateur."""
+        while True:
+            await websocket.send_json(await queue.get())
+
+    pumping = asyncio.create_task(pump())
+    try:
+        await websocket.send_json(radio.status())
+        while True:
+            data = await websocket.receive_json()
+            kind = data.get("type")
+
+            if kind == "send":
+                text = (data.get("text") or "").strip()
+                if text:
+                    # En tache de fond : un appel au modele prend plusieurs
+                    # secondes et ne doit pas bloquer la reception.
+                    asyncio.create_task(
+                        radio.send(data.get("persona", "crew"), text)
+                    )
+            elif kind == "confirm":
+                asyncio.create_task(
+                    radio.confirm(data.get("id", ""), bool(data.get("approved")))
+                )
+            elif kind == "reset":
+                radio.reset(data.get("persona"))
+    except (WebSocketDisconnect, asyncio.CancelledError):
+        pass
+    except Exception:
+        log.debug("Client radio deconnecte", exc_info=True)
+    finally:
+        pumping.cancel()
+        radio.unsubscribe(queue)
 
 
 # --- Service du dashboard compile, s'il existe ---
