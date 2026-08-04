@@ -1,0 +1,34 @@
+# --- Secrets : ne JAMAIS committer de cles API ---
+.env
+.env.*
+!.env.example
+*.key
+secrets.json
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# --- Node / frontend ---
+node_modules/
+dist/
+build/
+.vite/
+*.local
+*.tsbuildinfo
+
+# --- C# / .NET ---
+bin/
+obj/
+*.user
+*.suo
+
+# --- Divers ---
+.DS_Store
+Thumbs.db
+*.log
