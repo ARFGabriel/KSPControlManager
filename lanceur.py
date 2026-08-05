@@ -96,14 +96,14 @@ def attendre_ksp() -> None:
 def surveiller_fermeture(fenetre) -> None:
     """Ferme la fenetre quand le jeu se termine.
 
-    Deux precautions :
+    Comportement optionnel, desactive par defaut : refermer le centre de
+    controle a chaque fois qu'on quitte KSP obligeait a le relancer avant
+    chaque session, ce qui est plus penible qu'utile. Par defaut la fenetre
+    reste ouverte et affiche simplement l'etat "en attente du jeu".
 
-    - on n'arme la surveillance qu'apres avoir VU le jeu tourner. Sans cela,
-      un demarrage avec --maintenant (jeu pas encore lance) refermait la
-      fenetre six secondes plus tard, le veilleur prenant l'absence initiale
-      pour une fermeture.
-    - on exige plusieurs absences consecutives : KSP disparait brievement de
-      la liste des processus lors de certains changements de scene lourds.
+    On n'arme la surveillance qu'apres avoir vu le jeu tourner, et on exige
+    plusieurs absences consecutives : KSP disparait brievement de la liste des
+    processus lors de certains changements de scene lourds.
     """
     while not ksp_tourne():
         time.sleep(2.0)
@@ -122,6 +122,19 @@ def surveiller_fermeture(fenetre) -> None:
             except Exception:
                 pass
             return
+
+
+def deja_lance() -> bool:
+    """Un centre de controle occupe-t-il deja le port ?
+
+    Sans ce garde-fou, un second lancement echoue a demarrer son serveur et
+    affiche une fenetre vide, ce qui ressemble a une panne.
+    """
+    try:
+        with urllib.request.urlopen(f"{URL}/api/health", timeout=1.5):
+            return True
+    except (urllib.error.URLError, OSError):
+        return False
 
 
 # ----------------------------------------------------------------------
@@ -149,6 +162,11 @@ def main() -> int:
         action="store_true",
         help="ouvrir sans attendre que KSP soit lance",
     )
+    parser.add_argument(
+        "--fermer-avec-jeu",
+        action="store_true",
+        help="refermer la fenetre quand on quitte KSP (desactive par defaut)",
+    )
     args = parser.parse_args()
 
     print()
@@ -156,6 +174,11 @@ def main() -> int:
     print("    KSP MISSION CONTROL")
     print("  ================================================")
     print()
+
+    if deja_lance():
+        print(f"  Un centre de controle tourne deja sur {URL}.")
+        print("  Rien a faire : sa fenetre est deja ouverte.")
+        return 0
 
     serveur = demarrer_backend()
     if not attendre_backend():
@@ -187,9 +210,14 @@ def main() -> int:
         screen=ecran,
     )
 
-    threading.Thread(
-        target=surveiller_fermeture, args=(fenetre,), daemon=True, name="veille-ksp"
-    ).start()
+    if args.fermer_avec_jeu:
+        threading.Thread(
+            target=surveiller_fermeture, args=(fenetre,), daemon=True,
+            name="veille-ksp",
+        ).start()
+    else:
+        print("  La fenetre restera ouverte meme apres la fermeture de KSP.")
+        print("  Elle se rebranchera seule a la prochaine partie.")
 
     # Bloque jusqu'a la fermeture de la fenetre.
     webview.start()

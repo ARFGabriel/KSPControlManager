@@ -30,13 +30,29 @@ lancer KSP grâce au simulateur intégré.
 
 Double-clique **`demarrer.bat`**. Il attend que Kerbal Space Program soit
 lancé, puis ouvre une **fenêtre native** (pas un onglet de navigateur) sur
-l'écran secondaire s'il y en a un, et la referme quand tu quittes le jeu.
+l'écran secondaire s'il y en a un.
 
-Pour travailler sans le jeu, sur le simulateur :
+**La fenêtre reste ouverte en permanence.** Elle ne se ferme pas quand tu
+quittes KSP : elle affiche « en attente du jeu » et se rebranche seule à la
+partie suivante. Un seul lancement couvre donc toutes tes sessions de jeu.
+
+Pour ne plus y penser du tout, `installer-au-demarrage.bat` place un raccourci
+dans le démarrage de Windows. Pour annuler, supprimer le raccourci depuis
+`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`.
+
+Options :
 
 ```bash
-demarrer.bat --maintenant
+demarrer.bat --maintenant        REM ouvrir sans attendre KSP (simulateur)
+demarrer.bat --fermer-avec-jeu   REM ancien comportement : fermer avec le jeu
 ```
+
+Lancer `demarrer.bat` une seconde fois ne casse rien : il détecte l'instance
+déjà en place et n'y touche pas.
+
+> **Note pour le développement :** le port 8000 appartient à cette fenêtre.
+> Tout backend de test doit tourner sur un autre port (`BACKEND_PORT=8010`),
+> sinon il vole le port et la fenêtre se retrouve sans serveur.
 
 ### Installation, une seule fois
 
