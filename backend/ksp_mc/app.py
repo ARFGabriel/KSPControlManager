@@ -203,6 +203,7 @@ async def planner_plan(
         # reelle des corps. Sans lui, on ne montre aucune date plutot qu'une
         # date fausse.
         data["fenetre"] = None
+        data["geometrie"] = None
         if conn is not None:
             premier = next(
                 (e for e in plan.etapes
@@ -210,10 +211,16 @@ async def planner_plan(
                 None,
             )
             if premier is not None:
-                data["fenetre"] = planner.prochaine_fenetre(
+                fenetre = planner.prochaine_fenetre(
                     conn, catalogue, premier.depuis, premier.vers,
                     premier.angle_de_phase,
                 )
+                data["fenetre"] = fenetre
+                if fenetre and not fenetre.get("recurrente"):
+                    data["geometrie"] = planner.geometrie(
+                        conn, catalogue, premier.depuis, premier.vers,
+                        fenetre["attente"], premier.duree,
+                    )
         return data
 
     return await asyncio.to_thread(travail)

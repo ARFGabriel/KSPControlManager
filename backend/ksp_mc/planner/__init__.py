@@ -3,12 +3,12 @@
 from .bodies import Body, BodyCatalog, load
 from .route import Etape, Plan, construire, itineraire
 from .transfer import Transfer, calculer
-from .window import date_kerbale, duree_lisible, prochaine_fenetre
+from .window import date_kerbale, duree_lisible, geometrie, prochaine_fenetre
 
 __all__ = [
     "Body", "BodyCatalog", "load", "Transfer", "calculer", "catalogue",
     "Etape", "Plan", "construire", "itineraire",
-    "prochaine_fenetre", "date_kerbale", "duree_lisible",
+    "prochaine_fenetre", "date_kerbale", "duree_lisible", "geometrie",
 ]
 
 _catalogue: BodyCatalog | None = None

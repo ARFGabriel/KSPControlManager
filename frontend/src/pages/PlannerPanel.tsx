@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { TransferDiagram, type Geometrie } from "../components/TransferDiagram";
 import { Panel, Stat } from "../components/ui";
 import * as f from "../format";
 
@@ -42,6 +43,7 @@ interface PlanResult {
   delta_v_total: number;
   duree_totale: number;
   fenetre: Fenetre | null;
+  geometrie: Geometrie | null;
 }
 
 const COULEURS: Record<string, string> = {
@@ -157,6 +159,8 @@ export function PlannerPanel() {
               </span>
             ))}
           </div>
+
+          {plan.geometrie && <TransferDiagram g={plan.geometrie} />}
 
           <Stat
             label="Δv total de la mission"

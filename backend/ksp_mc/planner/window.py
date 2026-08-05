@@ -150,6 +150,68 @@ def _fenetre_recurrente(conn, corps: Body, lune: Body, altitude: float = 100_000
     }
 
 
+def geometrie(
+    conn,
+    catalog: BodyCatalog,
+    depart: str,
+    arrivee: str,
+    attente: float,
+    duree_transfert: float,
+) -> dict | None:
+    """Positions angulaires necessaires au trace du transfert.
+
+    Trois instants comptent : maintenant, le moment du depart, et l'arrivee.
+    Le dessin ne montre rien d'utile s'il se contente de l'instant present :
+    l'interet est justement de voir ou seront les corps quand on partira.
+
+    Tous les angles sont en degres, mesures dans le plan orbital du parent.
+    """
+    corps_d = catalog.get(depart)
+    corps_a = catalog.get(arrivee)
+    if corps_d is None or corps_a is None or corps_d.parent != corps_a.parent:
+        return None
+
+    parent = catalog.get(corps_d.parent) if corps_d.parent else None
+    if parent is None:
+        return None
+
+    angle_d = angle_orbital(conn, depart, parent.name)
+    angle_a = angle_orbital(conn, arrivee, parent.name)
+    if angle_d is None or angle_a is None:
+        return None
+
+    t_d = periode(corps_d, parent)
+    t_a = periode(corps_a, parent)
+    if t_d <= 0 or t_a <= 0:
+        return None
+
+    vitesse_d = 360.0 / t_d
+    vitesse_a = 360.0 / t_a
+
+    return {
+        "parent": parent.name,
+        "depart": depart,
+        "arrivee": arrivee,
+        "rayon_depart": corps_d.orbit_radius,
+        "rayon_arrivee": corps_a.orbit_radius,
+        "maintenant": {
+            "depart": angle_d % 360,
+            "arrivee": angle_a % 360,
+        },
+        "au_depart": {
+            "depart": (angle_d + vitesse_d * attente) % 360,
+            "arrivee": (angle_a + vitesse_a * attente) % 360,
+        },
+        "a_l_arrivee": {
+            # Le vaisseau parcourt exactement une demi-ellipse : il arrive a
+            # l'oppose de son point de depart.
+            "vaisseau": (angle_d + vitesse_d * attente + 180.0) % 360,
+            "arrivee": (angle_a + vitesse_a * (attente + duree_transfert)) % 360,
+        },
+        "duree_transfert": duree_transfert,
+    }
+
+
 def date_kerbale(ut: float) -> dict:
     """Convertit un temps universel en date du calendrier kerbal.
 
