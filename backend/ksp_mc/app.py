@@ -226,6 +226,58 @@ async def planner_plan(
     return await asyncio.to_thread(travail)
 
 
+@app.get("/api/planner/cibles")
+async def planner_cibles() -> dict:
+    """Vaisseaux pouvant servir de cible a un rendez-vous."""
+    conn = _connexion_jeu()
+    if conn is None:
+        return {"disponible": False, "raison": "Pas de liaison avec le jeu.",
+                "cibles": []}
+
+    from .planner import rendezvous as rdv
+
+    orbites = await asyncio.to_thread(rdv.lire_orbites, conn)
+    return {
+        "disponible": True,
+        "cibles": [asdict(o) for o in orbites],
+    }
+
+
+@app.get("/api/planner/rendezvous")
+async def planner_rendezvous(
+    cible: str,
+    chasseur: str | None = None,
+    chasseur_altitude: float | None = None,
+) -> dict:
+    conn = _connexion_jeu()
+    if conn is None:
+        return {
+            "possible": False,
+            "raison": (
+                "Le rendez-vous demande la position reelle des engins : "
+                "il faut que KSP soit lance."
+            ),
+        }
+
+    from .planner import rendezvous as rdv
+
+    def travail() -> dict:
+        catalogue = planner.catalogue(conn)
+        plan = rdv.calculer(
+            conn, catalogue, cible,
+            chasseur_altitude=chasseur_altitude,
+            chasseur_nom=chasseur,
+        )
+        if plan is None:
+            return {"possible": False,
+                    "raison": f"Cible '{cible}' introuvable ou hors orbite."}
+        data = asdict(plan)
+        data["possible"] = True
+        return data
+
+    return await asyncio.to_thread(travail)
+
+
 @app.get("/api/radio/status")
 async def radio_status() -> dict:
     return radio.status()

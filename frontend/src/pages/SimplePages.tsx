@@ -8,6 +8,7 @@ import type { Telemetry } from "../types";
 import { useOverview } from "../useOverview";
 import { CrewPanel, FleetPanel, ProgramPanel } from "./FleetPanel";
 import { PlannerPanel } from "./PlannerPanel";
+import { RendezvousPanel } from "./RendezvousPanel";
 
 /** Centre spatial : vue d'ensemble du programme. */
 export function SpaceCenterPage({ t }: { t: Telemetry }) {
@@ -50,6 +51,9 @@ export function TrackingPage({ t }: { t: Telemetry }) {
     <div className="dashboard deux">
       <div className="column">
         <FleetPanel overview={overview} titre="Tous les vaisseaux" grandir />
+        {/* La station de suivi est l'endroit naturel pour préparer un
+            rendez-vous : c'est là qu'on regarde sa flotte. */}
+        <RendezvousPanel />
       </div>
 
       <div className="column">
