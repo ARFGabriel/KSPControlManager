@@ -52,15 +52,53 @@ class PartInfo:
     engine: EngineInfo | None = None
 
 
+def reseau_ergols(
+    parts: list[PartInfo],
+    lignes: list[tuple[int, int]] | None,
+) -> dict[int, set[int]]:
+    """Groupes de decouplage que chaque piece peut alimenter.
+
+    Sans conduite, une piece n'alimente que son propre groupe : c'est le
+    comportement d'origine, et il reste inchange. Avec des conduites, une
+    piece alimente aussi tous les groupes situes en aval -- c'est ce qui rend
+    l'asparagus staging calculable.
+    """
+    by_index = {p.index: p for p in parts}
+    aval: dict[int, list[int]] = {}
+    for depuis, vers in lignes or []:
+        aval.setdefault(depuis, []).append(vers)
+
+    portee: dict[int, set[int]] = {}
+    for piece in parts:
+        vus: set[int] = set()
+        pile = [piece.index]
+        groupes: set[int] = set()
+        while pile:
+            i = pile.pop()
+            if i in vus:
+                continue
+            vus.add(i)
+            courante = by_index.get(i)
+            if courante is None:
+                continue
+            groupes.add(courante.decouple_stage)
+            pile.extend(aval.get(i, ()))
+        portee[piece.index] = groupes
+
+    return portee
+
+
 def compute_stages(
     parts: list[PartInfo],
     densities: dict[str, float],   # nom -> kg par unite
     current_stage: int,
     vacuum: bool = False,
+    lignes_ergol: list[tuple[int, int]] | None = None,
 ) -> list[StageInfo]:
     """Renvoie un StageInfo par etage, du plus haut numero au plus bas."""
 
     by_index = {p.index: p for p in parts}
+    portee = reseau_ergols(parts, lignes_ergol)
     present = {p.index for p in parts}
     # Etat mutable des ergols : on le vide au fil de la simulation.
     tanks: dict[int, dict[str, float]] = {
@@ -105,7 +143,7 @@ def compute_stages(
         ]
 
         dv, burn_time, thrust_sum, mdot_sum = _burn(
-            engines, present, tanks, by_index, densities, mass_of, vacuum
+            engines, present, tanks, by_index, densities, mass_of, vacuum, portee
         )
 
         end_mass = mass_of(present)
@@ -129,7 +167,8 @@ def compute_stages(
     return results
 
 
-def _burn(engines, present, tanks, by_index, densities, mass_of, vacuum):
+def _burn(engines, present, tanks, by_index, densities, mass_of, vacuum,
+          portee=None):
     """Integre la combustion d'un etage jusqu'a la PREMIERE extinction.
 
     C'est le point cle du calcul. Un etage ne s'arrete pas quand tous ses
@@ -162,7 +201,7 @@ def _burn(engines, present, tanks, by_index, densities, mass_of, vacuum):
             isp = eng.vacuum_isp if vacuum else eng.isp
             if th <= 0 or isp <= 0:
                 continue
-            if not _has_propellant(eng, part.index, present, tanks, by_index):
+            if not _has_propellant(eng, part.index, present, tanks, by_index, portee):
                 continue
             mdot = th / (isp * G0)
             thrust += th
@@ -190,42 +229,58 @@ def _burn(engines, present, tanks, by_index, densities, mass_of, vacuum):
 
         dv += (thrust / mass) * DT
         for eng, owner, mdot in draws:
-            _consume(eng, owner, mdot * DT, present, tanks, by_index, densities)
+            _consume(eng, owner, mdot * DT, present, tanks, by_index, densities,
+                     portee)
         elapsed += DT
 
     return dv, elapsed, thrust0, mdot0
 
 
-def _sources(eng: EngineInfo, owner: int, resource: str, present, tanks, by_index):
-    """Reservoirs ou ce moteur peut reellement puiser cet ergol.
+def _sources(eng: EngineInfo, owner: int, resource: str, present, tanks, by_index,
+             portee=None):
+    """Reservoirs ou ce moteur peut reellement puiser cet ergol, par priorite.
 
     Un decoupleur bloque le crossfeed : un moteur ne pompe que dans les
-    reservoirs qui seront largues en meme temps que lui. On approxime donc le
-    groupe d'alimentation par le decouple_stage commun.
+    reservoirs qui seront largues en meme temps que lui. Sans cette
+    restriction, le moteur principal viderait les reservoirs de l'etage
+    superieur : mesure a l'appui, il brulait 93 s au lieu de 70.
 
-    Sans cette restriction, le moteur principal viderait les reservoirs de
-    l'etage superieur : mesure a l'appui, il brulait 93 s au lieu de 70.
+    Les conduites de carburant ouvrent une exception, et elle est essentielle :
+    un reservoir relie par une conduite alimente le groupe en aval. Les
+    reservoirs exterieurs sont servis EN PREMIER, ce qui reproduit l'asparagus
+    staging -- ils se vident, on les largue, le coeur poursuit avec ses
+    propres reserves.
     """
     if eng.solid:
         # La poudre n'est pas transferable : le propulseur brule la sienne.
         return [owner] if tanks.get(owner, {}).get(resource, 0.0) > 0 else []
 
     group = by_index[owner].decouple_stage
-    return [
-        i
-        for i in present
-        if by_index[i].decouple_stage == group and tanks[i].get(resource, 0.0) > 0
-    ]
+
+    propres: list[int] = []
+    exterieurs: list[int] = []
+    for i in present:
+        if tanks[i].get(resource, 0.0) <= 0:
+            continue
+        groupe_piece = by_index[i].decouple_stage
+        if groupe_piece == group:
+            propres.append(i)
+        elif portee is not None and group in portee.get(i, ()):
+            exterieurs.append(i)
+
+    # Les reservoirs alimentes par conduite passent avant les siens.
+    return exterieurs + propres
 
 
-def _has_propellant(eng, owner, present, tanks, by_index) -> bool:
+def _has_propellant(eng, owner, present, tanks, by_index, portee=None) -> bool:
     for resource in eng.propellants:
-        if not _sources(eng, owner, resource, present, tanks, by_index):
+        if not _sources(eng, owner, resource, present, tanks, by_index, portee):
             return False
     return True
 
 
-def _consume(eng, owner, mass_kg, present, tanks, by_index, densities) -> None:
+def _consume(eng, owner, mass_kg, present, tanks, by_index, densities,
+             portee=None) -> None:
     """Retire `mass_kg` d'ergols, repartis selon le melange du moteur."""
     # Part massique de chaque ergol dans le melange.
     weights = {
@@ -236,23 +291,37 @@ def _consume(eng, owner, mass_kg, present, tanks, by_index, densities) -> None:
     if total <= 0:
         return
 
+    groupe_moteur = by_index[owner].decouple_stage
+
     for name, weight in weights.items():
         density = densities.get(name, 0.0)
         if density <= 0:
             continue
-        units_needed = (mass_kg * weight / total) / density
-        sources = _sources(eng, owner, name, present, tanks, by_index)
+        besoin = (mass_kg * weight / total) / density
+        sources = _sources(eng, owner, name, present, tanks, by_index, portee)
         if not sources:
             continue
-        # Vidange proportionnelle au contenu, pour eviter qu'un reservoir se
-        # vide seul alors que les autres sont pleins.
-        available = sum(tanks[i][name] for i in sources)
-        if available <= 0:
-            continue
-        drawn = min(units_needed, available)
-        for i in sources:
-            share = tanks[i][name] / available
-            tanks[i][name] = max(0.0, tanks[i][name] - drawn * share)
+
+        # Deux tours : d'abord les reservoirs exterieurs relies par conduite,
+        # ensuite les siens. C'est ce qui vide les propulseurs lateraux avant
+        # le coeur, et donc ce qui permet de les larguer.
+        for tour in (0, 1):
+            if besoin <= 0:
+                break
+            lot = [
+                i for i in sources
+                if (by_index[i].decouple_stage == groupe_moteur) == bool(tour)
+            ]
+            disponible = sum(tanks[i][name] for i in lot)
+            if disponible <= 0:
+                continue
+            pris = min(besoin, disponible)
+            # Vidange proportionnelle au contenu dans un meme lot, pour eviter
+            # qu'un reservoir se vide seul alors que les autres sont pleins.
+            for i in lot:
+                part = tanks[i][name] / disponible
+                tanks[i][name] = max(0.0, tanks[i][name] - pris * part)
+            besoin -= pris
 
 
 def snapshot(vessel, pressure_atm: float = 1.0) -> tuple[list[PartInfo], dict[str, float]]:

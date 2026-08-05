@@ -27,7 +27,14 @@ namespace KSP_AIAssistant
         // image. Une seconde suffit largement pour que l'affichage suive.
         private const float PERIODE = 1.0f;
 
+        // Le backend périme les données au bout de quinze secondes pour savoir
+        // si on a quitté l'éditeur. Il faut donc réémettre régulièrement même
+        // sans changement, sinon l'affichage se vide dès qu'on arrête de
+        // construire alors que les chiffres restent parfaitement valables.
+        private const float RAPPEL = 5.0f;
+
         private float prochainEnvoi;
+        private float dernierEnvoi;
         private bool envoiEnCours;
         private int derniereEmpreinte;
 
@@ -41,11 +48,13 @@ namespace KSP_AIAssistant
 
             ShipConstruct navire = EditorLogic.fetch.ship;
 
-            // On ne renvoie rien si le vaisseau n'a pas bougé : le backend
-            // garde la dernière version, et le réseau reste tranquille.
             int empreinte = Empreinte(navire);
-            if (empreinte == derniereEmpreinte) return;
+            bool aChange = empreinte != derniereEmpreinte;
+            bool tropVieux = Time.realtimeSinceStartup - dernierEnvoi > RAPPEL;
+            if (!aChange && !tropVieux) return;
+
             derniereEmpreinte = empreinte;
+            dernierEnvoi = Time.realtimeSinceStartup;
 
             string corps = ConstruireJson(navire);
             StartCoroutine(Envoyer(corps));
@@ -86,7 +95,46 @@ namespace KSP_AIAssistant
                 json.Append(PieceEnJson(navire.parts[i], i));
             }
 
-            json.Append("]}");
+            json.Append("],");
+            json.Append(LignesErgolEnJson(navire));
+            json.Append("}");
+            return json.ToString();
+        }
+
+        /// <summary>
+        /// Conduites de carburant, indispensables pour l'asparagus staging.
+        ///
+        /// Sans elles, un lanceur comme la Kerbal X est incalculable : les
+        /// propulseurs latéraux alimentent le moteur central, se vident donc
+        /// en premier, et sont largués pendant que le central poursuit. Un
+        /// modèle qui les ignore fait brûler chaque groupe séparément et se
+        /// trompe lourdement.
+        ///
+        /// Une conduite est une CompoundPart : sa pièce d'attache est la
+        /// source, sa cible est la destination du carburant.
+        /// </summary>
+        private string LignesErgolEnJson(ShipConstruct navire)
+        {
+            StringBuilder json = new StringBuilder(256);
+            json.Append("\"lignes_ergol\":[");
+
+            bool premiere = true;
+            for (int i = 0; i < navire.parts.Count; i++)
+            {
+                CompoundPart conduite = navire.parts[i] as CompoundPart;
+                if (conduite == null || conduite.target == null) continue;
+                if (!EstConduiteErgol(conduite)) continue;
+
+                int source = navire.parts.IndexOf(conduite.parent);
+                int cible = navire.parts.IndexOf(conduite.target);
+                if (source < 0 || cible < 0) continue;
+
+                if (!premiere) json.Append(",");
+                premiere = false;
+                json.AppendFormat("{{\"de\":{0},\"vers\":{1}}}", source, cible);
+            }
+
+            json.Append("]");
             return json.ToString();
         }
 
@@ -170,6 +218,26 @@ namespace KSP_AIAssistant
                 courante = courante.parent;
             }
             return -1; // jamais larguée
+        }
+
+        /// <summary>
+        /// Distingue une conduite de carburant d'une simple entretoise, qui
+        /// est elle aussi une CompoundPart avec une cible.
+        ///
+        /// On compare le nom du module plutôt que son type : CModuleFuelLine
+        /// ne vit pas dans les assemblys que ce projet référence, et le nom
+        /// fonctionne aussi pour les conduites ajoutées par des mods.
+        /// </summary>
+        private bool EstConduiteErgol(Part piece)
+        {
+            if (piece.Modules == null) return false;
+            for (int i = 0; i < piece.Modules.Count; i++)
+            {
+                PartModule module = piece.Modules[i];
+                if (module == null) continue;
+                if (module.moduleName == "CModuleFuelLine") return true;
+            }
+            return false;
         }
 
         private bool EstDecoupleur(Part piece)

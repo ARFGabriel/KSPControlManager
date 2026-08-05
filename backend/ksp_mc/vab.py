@@ -22,21 +22,37 @@ PEREMPTION_S = 15.0
 
 _dernier: dict | None = None
 _recu_a: float = 0.0
+# Charge brute conservee telle qu'envoyee par le mod. Sert au diagnostic :
+# sans elle, un calcul faux est indissociable d'une emission fausse.
+_brut: dict | None = None
 
 
 def enregistrer(charge: dict) -> None:
     """Stocke le vaisseau recu et en deduit le detail par etage."""
-    global _dernier, _recu_a
+    global _dernier, _recu_a, _brut
 
+    _brut = charge
     pieces, densites = _convertir(charge)
     etage_courant = int(charge.get("etage_courant", 0))
+
+    # Conduites de carburant : sans elles, un lanceur en asparagus comme la
+    # Kerbal X est incalculable. Chaque groupe de propulseurs brulerait dans
+    # son coin au lieu d'alimenter le coeur.
+    lignes = [
+        (int(l.get("de", -1)), int(l.get("vers", -1)))
+        for l in charge.get("lignes_ergol", []) or []
+        if l.get("de") is not None and l.get("vers") is not None
+    ]
+    lignes = [(a, b) for a, b in lignes if a >= 0 and b >= 0]
 
     # On calcule les deux situations plutot que d'en choisir une : le premier
     # etage travaille dans l'air, les suivants sous vide, et afficher un seul
     # chiffre trompe dans un cas ou dans l'autre.
     try:
-        etages = compute_stages(pieces, densites, etage_courant, vacuum=False)
-        sous_vide = compute_stages(pieces, densites, etage_courant, vacuum=True)
+        etages = compute_stages(pieces, densites, etage_courant,
+                                vacuum=False, lignes_ergol=lignes)
+        sous_vide = compute_stages(pieces, densites, etage_courant,
+                                   vacuum=True, lignes_ergol=lignes)
     except Exception:
         log.debug("Calcul de delta-v impossible sur le vaisseau du VAB", exc_info=True)
         etages, sous_vide = [], []
@@ -64,6 +80,11 @@ def enregistrer(charge: dict) -> None:
         "ressources": _resume_ressources(pieces, densites),
     }
     _recu_a = time.monotonic()
+
+
+def brut() -> dict:
+    """Derniere charge recue, sans transformation."""
+    return _brut or {"vide": True}
 
 
 def dernier() -> dict:

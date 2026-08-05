@@ -308,6 +308,12 @@ async def vab_lire() -> dict:
     return vab.dernier()
 
 
+@app.get("/api/vab/brut")
+async def vab_brut() -> dict:
+    """Charge telle que le mod l'a envoyee, pour diagnostic."""
+    return vab.brut()
+
+
 @app.get("/api/radio/status")
 async def radio_status() -> dict:
     return radio.status()
