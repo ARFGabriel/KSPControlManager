@@ -142,11 +142,24 @@ def _convertir(charge: dict) -> tuple[list[PartInfo], dict[str, float]]:
             poussee = float(brut_moteur.get("poussee_max", 0.0) or 0.0)
             isp_vide = float(brut_moteur.get("isp_vide", 0.0) or 0.0)
             isp_sol = float(brut_moteur.get("isp_sol", 0.0) or 0.0)
+            # ModuleEngines.maxThrust est la poussee SOUS VIDE. Au niveau de
+            # la mer, elle chute dans le meme rapport que l'impulsion
+            # specifique -- c'est la relation qu'utilise le jeu, et elle se
+            # verifie exactement :
+            #   RE-M3   1500 x 285/310 = 1379 kN
+            #   LV-T45   215 x 250/320 =  168 kN
+            #   RE-L10   250 x  90/350 = 64,3 kN
+            # Sans cette conversion, le TWR d'un moteur de vide au decollage
+            # est surestime d'un facteur quatre, et la duree de combustion
+            # divisee d'autant.
+            poussee_sol = (
+                poussee * (isp_sol / isp_vide) if isp_vide > 0 and isp_sol > 0
+                else poussee
+            )
+
             moteur = EngineInfo(
                 stage=int(brut.get("etage", -1)),
-                # Dans l'editeur on raisonne au niveau de la mer : c'est la
-                # situation du decollage, celle qui contraint le TWR.
-                max_thrust=poussee,
+                max_thrust=poussee_sol,
                 max_vacuum_thrust=poussee,
                 isp=isp_sol or isp_vide,
                 vacuum_isp=isp_vide or isp_sol,

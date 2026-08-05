@@ -85,6 +85,19 @@ def reseau_ergols(
             pile.extend(aval.get(i, ()))
         portee[piece.index] = groupes
 
+    # Les reservoirs d'un meme groupe sont empiles et communiquent librement :
+    # ce qui part par une conduite peut venir de n'importe lequel d'entre eux.
+    # Sans cette mise en commun, seul le reservoir ou la conduite est branchee
+    # alimente l'aval, et les autres se vident quatre fois moins vite -- l'etage
+    # dure alors 59 s au lieu de 13, et engloutit le carburant des suivants.
+    par_groupe: dict[int, set[int]] = {}
+    for piece in parts:
+        groupe = piece.decouple_stage
+        par_groupe.setdefault(groupe, set()).update(portee[piece.index])
+
+    for piece in parts:
+        portee[piece.index] = par_groupe[piece.decouple_stage]
+
     return portee
 
 
@@ -143,7 +156,8 @@ def compute_stages(
         ]
 
         dv, burn_time, thrust_sum, mdot_sum = _burn(
-            engines, present, tanks, by_index, densities, mass_of, vacuum, portee
+            engines, present, tanks, by_index, densities, mass_of, vacuum,
+            portee, stage - 1
         )
 
         end_mass = mass_of(present)
@@ -168,7 +182,7 @@ def compute_stages(
 
 
 def _burn(engines, present, tanks, by_index, densities, mass_of, vacuum,
-          portee=None):
+          portee=None, groupe_largue=None):
     """Integre la combustion d'un etage jusqu'a la PREMIERE extinction.
 
     C'est le point cle du calcul. Un etage ne s'arrete pas quand tous ses
@@ -185,6 +199,19 @@ def _burn(engines, present, tanks, by_index, densities, mass_of, vacuum,
     thrust0 = 0.0
     mdot0 = 0.0
     watch: set[int] | None = None
+
+    # Reserves du groupe qui sera largue au prochain etagement. Sur un
+    # asparagus, c'est ce qui determine la fin de l'etage : quand la paire
+    # exterieure est vide, on la largue -- alors qu'aucun moteur ne s'eteint,
+    # puisqu'ils basculent tous sur la paire suivante. Sans cette regle, le
+    # premier etage engloutit tout le carburant du lanceur.
+    ergols_utiles = {e for part in engines for e in part.engine.propellants}
+    largables = [
+        i for i in present
+        if groupe_largue is not None
+        and by_index[i].decouple_stage == groupe_largue
+        and any(tanks[i].get(r, 0.0) > 0 for r in ergols_utiles)
+    ]
 
     steps = 0
     max_steps = int(MAX_BURN_S / DT)
@@ -232,6 +259,15 @@ def _burn(engines, present, tanks, by_index, densities, mass_of, vacuum,
             _consume(eng, owner, mdot * DT, present, tanks, by_index, densities,
                      portee)
         elapsed += DT
+
+        # Le groupe a larguer est vide : c'est le moment d'etager, meme si
+        # les moteurs tournent encore sur les reserves suivantes.
+        if largables:
+            reste = sum(
+                tanks[i].get(r, 0.0) for i in largables for r in ergols_utiles
+            )
+            if reste <= 1e-6:
+                break
 
     return dv, elapsed, thrust0, mdot0
 
@@ -302,16 +338,24 @@ def _consume(eng, owner, mass_kg, present, tanks, by_index, densities,
         if not sources:
             continue
 
-        # Deux tours : d'abord les reservoirs exterieurs relies par conduite,
-        # ensuite les siens. C'est ce qui vide les propulseurs lateraux avant
-        # le coeur, et donc ce qui permet de les larguer.
-        for tour in (0, 1):
+        # Ordre de vidange : celui qui sera largue le plus tot se vide le
+        # premier, et le groupe du moteur passe en dernier.
+        #
+        # C'est ce qui distingue un asparagus CHAINE d'un simple faisceau. Sur
+        # la Kerbal X, les paires de propulseurs sont larguees aux etages 6, 5
+        # puis 4 : vider les trois ensemble consomme 56 t la ou le jeu n'en
+        # brule que 12, et fausse tout le decoupage des etages.
+        lots: dict[int, list[int]] = {}
+        for i in sources:
+            lots.setdefault(by_index[i].decouple_stage, []).append(i)
+
+        def ordre(groupe: int) -> tuple[bool, int]:
+            return (groupe == groupe_moteur, -groupe)
+
+        for groupe in sorted(lots, key=ordre):
             if besoin <= 0:
                 break
-            lot = [
-                i for i in sources
-                if (by_index[i].decouple_stage == groupe_moteur) == bool(tour)
-            ]
+            lot = lots[groupe]
             disponible = sum(tanks[i][name] for i in lot)
             if disponible <= 0:
                 continue
