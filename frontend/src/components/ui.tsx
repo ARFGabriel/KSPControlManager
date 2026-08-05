@@ -4,13 +4,19 @@ export function Panel({
   title,
   extra,
   children,
+  className = "",
+  grandir = false,
 }: {
   title: string;
   extra?: ReactNode;
   children: ReactNode;
+  /** Classes supplémentaires, par ex. "radio" pour un corps en flex. */
+  className?: string;
+  /** Le panneau absorbe la hauteur restante de sa colonne. */
+  grandir?: boolean;
 }) {
   return (
-    <section className="panel">
+    <section className={`panel ${grandir ? "grandir" : ""} ${className}`.trim()}>
       <header>
         <span>{title}</span>
         {extra}

@@ -59,7 +59,14 @@ export function OrbitDiagram({
   const perPx = cx + a * (1 - e) * scale;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }}>
+    // La hauteur est bornée : sans cela le diagramme s'étire avec la largeur
+    // de la colonne et pousse les chiffres hors du panneau.
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      width="100%"
+      preserveAspectRatio="xMidYMid meet"
+      style={{ display: "block", maxHeight: "13rem" }}
+    >
       <ellipse
         cx={ellipseCx}
         cy={cy}

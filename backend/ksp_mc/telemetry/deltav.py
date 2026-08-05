@@ -77,7 +77,18 @@ def compute_stages(
 
     results: list[StageInfo] = []
 
-    for stage in range(current_stage - 1, -1, -1):
+    # Borne haute : le plus grand numero d'etage reellement porte par une
+    # piece, jamais au-dela de l'etage courant.
+    #
+    # Au pas de tir, current_stage vaut un de plus que le plus haut etage
+    # existant (4 pour des pieces numerotees 3 a 0) : partir de current_stage-1
+    # fonctionnait donc par coincidence. Mais une fois tout largue,
+    # current_stage tombe a 0 et cette meme formule donne une plage vide : le
+    # dernier etage, celui qui brule encore, devenait incalculable.
+    highest = max((p.stage for p in parts), default=-1)
+    start = min(current_stage, highest)
+
+    for stage in range(start, -1, -1):
         # Largage : les pieces dont le decouple_stage vaut cet etage partent
         # au moment ou l'etage s'active, donc avant la combustion.
         present = {i for i in present if by_index[i].decouple_stage != stage}

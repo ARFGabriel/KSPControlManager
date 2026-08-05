@@ -43,6 +43,10 @@ class Settings:
     krpc_rpc_port: int = _int("KRPC_RPC_PORT", 50000)
     krpc_stream_port: int = _int("KRPC_STREAM_PORT", 50001)
     krpc_retry_s: float = _float("KRPC_RETRY_S", 5.0)
+    # Option de developpement : force la scene annoncee par le simulateur,
+    # pour pouvoir travailler sur les pages hors vol sans lancer KSP.
+    # Valeurs : flight, space_center, tracking_station, editor_vab, editor_sph
+    sim_scene: str = os.getenv("KSP_MC_SIM_SCENE", "flight")
 
     # --- Diffusion ---
     telemetry_hz: float = _float("TELEMETRY_HZ", 10.0)

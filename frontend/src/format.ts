@@ -15,6 +15,28 @@ export function met(seconds: number): string {
   return days > 0 ? `T${sign}${days}j ${base}` : `T${sign}${base}`;
 }
 
+// Calendrier kerbal : une journée fait 6 heures, une année 426 jours.
+const JOUR_KERBAL = 6 * 3600;
+const ANNEE_KERBALE = 426 * JOUR_KERBAL;
+
+/** Temps universel au format du jeu : « Année 1, Jour 90 — 3h 25m ». */
+export function ut(seconds: number): string {
+  if (!isFinite(seconds) || seconds < 0) return "—";
+  const annee = Math.floor(seconds / ANNEE_KERBALE) + 1;
+  const reste = seconds % ANNEE_KERBALE;
+  const jour = Math.floor(reste / JOUR_KERBAL) + 1;
+  const dansLeJour = reste % JOUR_KERBAL;
+  const h = Math.floor(dansLeJour / 3600);
+  const m = Math.floor((dansLeJour % 3600) / 60);
+  return `Année ${annee}, Jour ${jour} — ${h}h ${String(m).padStart(2, "0")}m`;
+}
+
+/** Numéro de jour depuis le début du programme. */
+export function jourKerbal(seconds: number): string {
+  if (!isFinite(seconds) || seconds < 0) return "—";
+  return String(Math.floor(seconds / JOUR_KERBAL) + 1);
+}
+
 /** Duree courte, pour un temps restant. */
 export function duration(seconds: number): string {
   if (!isFinite(seconds) || seconds <= 0) return "--:--";

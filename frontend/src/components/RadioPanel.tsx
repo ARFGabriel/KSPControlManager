@@ -9,11 +9,17 @@ const LABELS: Record<string, string> = {
   crew: "Équipage",
 };
 
-export function RadioPanel() {
+export function RadioPanel({ equipage = true }: { equipage?: boolean }) {
   const { entries, status, confirmation, waiting, send, respond, reset } = useRadio();
-  const [persona, setPersona] = useState<Persona>("crew");
+  const [persona, setPersona] = useState<Persona>(equipage ? "crew" : "ground");
   const [text, setText] = useState("");
   const logRef = useRef<HTMLDivElement>(null);
+
+  // Hors vol il n'y a personne à bord : on bascule sur le sol plutôt que de
+  // laisser un canal sélectionné qui ne peut répondre à rien.
+  useEffect(() => {
+    if (!equipage && persona === "crew") setPersona("ground");
+  }, [equipage, persona]);
 
   // On garde toujours le dernier échange visible.
   useEffect(() => {
@@ -30,6 +36,8 @@ export function RadioPanel() {
   return (
     <Panel
       title="Radio"
+      className="radio"
+      grandir
       extra={
         status ? (
           <span style={{ color: status.available ? "var(--dim)" : "var(--red)" }}>
@@ -45,12 +53,14 @@ export function RadioPanel() {
         >
           Sol
         </button>
-        <button
-          className={persona === "crew" ? "active" : ""}
-          onClick={() => setPersona("crew")}
-        >
-          Bord
-        </button>
+        {equipage && (
+          <button
+            className={persona === "crew" ? "active" : ""}
+            onClick={() => setPersona("crew")}
+          >
+            Bord
+          </button>
+        )}
         <span style={{ flex: 1 }} />
         <button onClick={reset} title="Effacer la conversation">
           Effacer

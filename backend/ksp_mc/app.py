@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import overview
 from .config import PROJECT_DIR, settings
 from .hub import hub
 from .radio.service import radio
@@ -75,6 +76,30 @@ async def ws_telemetry(websocket: WebSocket) -> None:
         log.debug("Client WebSocket deconnecte", exc_info=True)
     finally:
         hub.unsubscribe(queue)
+
+
+@app.get("/api/overview")
+async def api_overview() -> dict:
+    """Flotte, equipage et budget, pour les pages hors vol.
+
+    Volontairement hors du flux de telemetrie : ces donnees sont couteuses a
+    lire et ne changent qu'a l'echelle de la minute.
+    """
+    from .telemetry.krpc_source import KrpcSource
+
+    source = hub.source
+    if not isinstance(source, KrpcSource) or source.conn is None:
+        return {
+            "available": False,
+            "reason": "Pas de liaison avec le jeu.",
+            "vessels": [],
+            "crew": [],
+            "warnings": [],
+        }
+
+    data = await asyncio.to_thread(overview.cached, source.conn)
+    data["available"] = "error" not in data
+    return data
 
 
 @app.get("/api/radio/status")

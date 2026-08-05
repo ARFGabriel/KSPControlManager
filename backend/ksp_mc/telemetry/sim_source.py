@@ -16,6 +16,7 @@ from __future__ import annotations
 import math
 import time
 
+from ..config import settings
 from .schema import OrbitInfo, ResourceInfo, StageInfo, Telemetry
 from .source import TelemetrySource
 
@@ -322,7 +323,7 @@ class SimSource(TelemetrySource):
             connected=True,
             source=self.name,
             timestamp=time.time(),
-            game_scene="flight",
+            game_scene=settings.sim_scene,
             ut=self.ut,
             met=self.met,
             vessel_name="Simulateur MC-1",

@@ -327,14 +327,20 @@ class KrpcSource(TelemetrySource):
         weight_kn = mass_t * gravity  # t * m/s2 = kN
         twr = available_thrust_kn / weight_kn if weight_kn > 0 else 0.0
 
-        # Delta-v total : on prefere la valeur du jeu quand elle existe, sinon
-        # la somme de notre propre calcul par etage. Les deux concordent a
-        # 0,6 % pres, mais celle du jeu fait foi.
-        if cold.get("delta_v_available"):
-            dv_total = cold.get("delta_v", 0.0)
-            dv_available = True
-        elif self._stages:
+        # Delta-v total : notre propre calcul fait foi, pour que le total soit
+        # toujours la somme du detail affiche juste a cote. La valeur du jeu ne
+        # sert que de repli.
+        #
+        # Les deux ne mesurent pas tout a fait la meme chose : kRPC renvoie 0
+        # des qu'aucun moteur n'est allume, meme s'il reste des ergols a bord.
+        # Notre simulation repond a la question utile pour piloter -- combien
+        # de delta-v ces ergols representent-ils -- et laisse le TWR et la
+        # reserve electrique dire s'ils sont exploitables tout de suite.
+        if self._stages:
             dv_total = deltav.total_delta_v(self._stages)
+            dv_available = True
+        elif cold.get("delta_v_available"):
+            dv_total = cold.get("delta_v", 0.0)
             dv_available = True
         else:
             dv_total = 0.0

@@ -3,3 +3,7 @@ uvicorn[standard]>=0.34
 krpc>=0.6.0
 python-dotenv>=1.0
 httpx>=0.28
+
+# Fenetre native du centre de controle (moteur WebView2 de Windows)
+pywebview>=6.2
+psutil>=7.0

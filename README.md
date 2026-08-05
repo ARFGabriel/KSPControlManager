@@ -28,38 +28,65 @@ lancer KSP grâce au simulateur intégré.
 
 ## Démarrage
 
-### 1. Backend
+Double-clique **`demarrer.bat`**. Il attend que Kerbal Space Program soit
+lancé, puis ouvre une **fenêtre native** (pas un onglet de navigateur) sur
+l'écran secondaire s'il y en a un, et la referme quand tu quittes le jeu.
+
+Pour travailler sans le jeu, sur le simulateur :
+
+```bash
+demarrer.bat --maintenant
+```
+
+### Installation, une seule fois
 
 ```bash
 cd backend
 python -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 copy .env.example .env
-.venv\Scripts\python.exe run.py
 ```
 
-Le serveur écoute sur <http://127.0.0.1:8000>.
+Puis renseigne `GEMINI_API_KEY` dans `backend\.env`.
 
-### 2. Dashboard
+### Développement du dashboard
 
-En développement (rechargement à chaud) :
+Rechargement à chaud sur <http://localhost:5173> :
 
 ```bash
 cd frontend
-npm install
 npm run dev
 ```
 
-puis <http://localhost:5173>.
-
-Pour l'usage normal, on compile une fois et le backend sert tout :
+Pour que la fenêtre native voie tes changements, il faut recompiler :
 
 ```bash
 cd frontend
 npm run build
 ```
 
-puis simplement <http://127.0.0.1:8000>.
+## Pages selon la scène de jeu
+
+Le tableau de bord suit **automatiquement** l'endroit où tu te trouves, sans
+sélecteur manuel : c'est la scène rapportée par le jeu qui décide.
+
+| Scène | Page |
+|---|---|
+| `flight` | Vol : attitude, orbite, propulsion, étages, radio |
+| `space_center` | Programme, équipage, flotte en vol |
+| `tracking_station` | Toute la flotte et sa répartition |
+| `editor_vab` / `editor_sph` | Construction (données limitées, voir plus bas) |
+
+La mise en page tient **toujours dans la fenêtre** : aucun défilement de page,
+quelle que soit la résolution. La taille de base du texte suit la hauteur de
+la fenêtre. Seul le journal radio défile, ce qui est normal pour une
+conversation.
+
+**Limite connue :** kRPC ne distingue que ces cinq scènes. Le centre de
+recherche, le contrôle de mission et l'administration sont des interfaces
+ouvertes *par-dessus* le centre spatial, pas des scènes : impossible de les
+détecter. De même, kRPC n'expose aucune API d'éditeur, donc la page VAB reste
+vide tant que le mod du jeu n'aura pas été étendu pour émettre ces données.
 
 ## Mode simulateur
 

@@ -32,26 +32,59 @@ namespace KSP_AIAssistant
 
             try
             {
-                string dossier = System.IO.Path.GetDirectoryName(
-                    System.Reflection.Assembly.GetExecutingAssembly().Location);
-                string chemin = System.IO.Path.Combine(dossier, "apikey.txt");
-
-                if (System.IO.File.Exists(chemin))
+                // Deux chemins possibles, essayés dans l'ordre. Selon la façon
+                // dont KSP charge le plugin, Assembly.Location peut être vide :
+                // on retombe alors sur le chemin d'installation du jeu, qui est
+                // toujours renseigné.
+                string[] candidats = new string[]
                 {
+                    CheminPresDeLaDll(),
+                    KSPUtil.ApplicationRootPath + "GameData/AIAssistant/apikey.txt"
+                };
+
+                foreach (string chemin in candidats)
+                {
+                    if (string.IsNullOrEmpty(chemin)) continue;
+                    if (!System.IO.File.Exists(chemin)) continue;
+
                     apiKey = System.IO.File.ReadAllText(chemin).Trim();
+                    if (!string.IsNullOrEmpty(apiKey))
+                    {
+                        Debug.Log("[AIAssistant] Clé API chargée depuis " + chemin);
+                        return true;
+                    }
                 }
 
-                if (string.IsNullOrEmpty(apiKey))
-                {
-                    Debug.LogError("[AIAssistant] Clé API absente. Crée le fichier : " + chemin);
-                    return false;
-                }
-                return true;
+                Debug.LogError("[AIAssistant] Clé API introuvable. Crée le fichier : "
+                    + KSPUtil.ApplicationRootPath + "GameData/AIAssistant/apikey.txt");
+                return false;
             }
             catch (System.Exception e)
             {
                 Debug.LogError("[AIAssistant] Lecture de la clé impossible : " + e.Message);
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Chemin du apikey.txt posé à côté de la DLL. Peut renvoyer null si
+        /// l'assembly n'expose pas son emplacement.
+        /// </summary>
+        private string CheminPresDeLaDll()
+        {
+            try
+            {
+                string emplacement = System.Reflection.Assembly.GetExecutingAssembly().Location;
+                if (string.IsNullOrEmpty(emplacement)) return null;
+
+                string dossier = System.IO.Path.GetDirectoryName(emplacement);
+                if (string.IsNullOrEmpty(dossier)) return null;
+
+                return System.IO.Path.Combine(dossier, "apikey.txt");
+            }
+            catch
+            {
+                return null;
             }
         }
 
