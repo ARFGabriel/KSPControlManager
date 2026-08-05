@@ -9,6 +9,7 @@ import { useOverview } from "../useOverview";
 import { CrewPanel, FleetPanel, ProgramPanel } from "./FleetPanel";
 import { PlannerPanel } from "./PlannerPanel";
 import { RendezvousPanel } from "./RendezvousPanel";
+import { VabPanel } from "./VabPanel";
 
 /** Centre spatial : vue d'ensemble du programme. */
 export function SpaceCenterPage({ t }: { t: Telemetry }) {
@@ -85,13 +86,8 @@ export function EditorPage({ t }: { t: Telemetry }) {
       {/* Le planificateur a toute sa place ici : c'est en construisant qu'on
           a besoin de savoir combien de Δv la mission va réclamer. */}
       <div className="column">
+        <VabPanel atelier={atelier} />
         <PlannerPanel />
-        <Panel title={`Construction — ${atelier}`}>
-          <div className="empty">
-            Le Δv par étage pendant la construction demandera d'étendre le mod
-            du jeu : kRPC n'expose pas le contenu de l'éditeur.
-          </div>
-        </Panel>
       </div>
 
       <div className="column">

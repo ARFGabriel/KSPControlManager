@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import overview, planner
+from . import overview, planner, vab
 from .config import PROJECT_DIR, settings
 from .hub import hub
 from .radio.service import radio
@@ -290,6 +290,22 @@ async def planner_rendezvous(
         return data
 
     return await asyncio.to_thread(travail)
+
+
+@app.post("/api/vab")
+async def vab_recevoir(charge: dict) -> dict:
+    """Point d'entree du mod : contenu du vaisseau en construction."""
+    try:
+        await asyncio.to_thread(vab.enregistrer, charge)
+        return {"ok": True}
+    except Exception as exc:
+        log.debug("Charge du VAB illisible", exc_info=True)
+        return {"ok": False, "erreur": str(exc)}
+
+
+@app.get("/api/vab")
+async def vab_lire() -> dict:
+    return vab.dernier()
 
 
 @app.get("/api/radio/status")
