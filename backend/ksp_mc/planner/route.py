@@ -124,7 +124,17 @@ def construire(
     vers_surface: bool = False,
     parking_depart: float | None = None,
     parking_arrivee: float | None = None,
+    escale=None,
 ) -> Plan | None:
+    """Construit le plan de mission.
+
+    `escale` est une orbite d'engin existant (station relais, ravitailleur)
+    ou l'on s'arrete avant de repartir. Elle a deux effets : elle ajoute le
+    cout du rendez-vous, et elle impose son altitude comme orbite de depart
+    pour la suite du voyage -- puisque c'est de la qu'on repartira.
+    """
+    if escale is not None:
+        parking_depart = escale.demi_grand_axe - _rayon(catalog, escale.corps)
     chemin = itineraire(catalog, depart, arrivee)
     if chemin is None:
         return None
@@ -168,6 +178,10 @@ def construire(
                     approximatif=True,
                 )
             )
+
+    # --- Escale ---
+    if escale is not None:
+        _escale(catalog, plan, escale, alt_depart)
 
     # --- Enchainement des etapes intermediaires ---
     # Vrai quand la capture precedente nous a laisses sur une ellipse qui
@@ -392,6 +406,58 @@ def _evasion(catalog, plan, lune: Body, parent: Body, alt_lune) -> None:
                 f"l'orbite de {lune.name} autour de {parent.name}"
             ),
         )
+    )
+
+
+def _rayon(catalog: BodyCatalog, nom: str) -> float:
+    corps = catalog.get(nom)
+    return corps.radius if corps else 0.0
+
+
+def _escale(catalog, plan: Plan, escale, altitude: float) -> None:
+    """Arret sur une station ou un vaisseau existant.
+
+    On suppose le lanceur mis directement dans le plan de la station : c'est
+    ce qu'on fait en pratique, et cela evite un changement de plan qui serait
+    de loin le poste le plus cher. On le dit explicitement, car partir d'un
+    plan quelconque changerait completement l'addition.
+    """
+    corps = catalog.get(escale.corps)
+    if corps is None:
+        return
+
+    r = corps.radius + altitude
+    v = math.sqrt(corps.mu / r)
+
+    # Approche finale : quelques dizaines de m/s d'ajustements, inevitables
+    # meme sur un rendez-vous bien mene.
+    approche = max(20.0, v * 0.01)
+
+    plan.etapes.append(
+        Etape(
+            genre="capture",
+            titre=f"Rendez-vous avec {escale.nom}",
+            delta_v=approche,
+            depuis=escale.corps,
+            vers=escale.nom,
+            detail=(
+                f"amarrage a {altitude / 1000:.0f} km ; approche finale et "
+                f"annulation de la vitesse relative"
+            ),
+            approximatif=True,
+        )
+    )
+
+    if escale.inclinaison > 0.5:
+        plan.avertissements.append(
+            f"{escale.nom} orbite a {escale.inclinaison:.1f}° d'inclinaison : "
+            f"il faut lancer dans son plan, sinon le changement de plan "
+            f"coutera plusieurs centaines de m/s."
+        )
+
+    plan.avertissements.append(
+        f"Escale a {escale.nom} : la suite du voyage part de son orbite a "
+        f"{altitude / 1000:.0f} km, pas d'une orbite basse."
     )
 
 

@@ -170,12 +170,25 @@ async def planner_plan(
     vers_surface: bool = False,
     parking_depart: float | None = None,
     parking_arrivee: float | None = None,
+    escale: str | None = None,
 ) -> dict:
-    """Plan de mission complet : itineraire, etapes, dates de depart."""
+    """Plan de mission complet : itineraire, etapes, dates de depart.
+
+    `escale` est le nom d'un engin existant ou l'on s'arrete avant de repartir.
+    """
     conn = _connexion_jeu()
 
     def travail() -> dict:
+        from .planner import rendezvous as rdv
+
         catalogue = planner.catalogue(conn)
+
+        orbite_escale = None
+        if escale and conn is not None:
+            orbite_escale = next(
+                (o for o in rdv.lire_orbites(conn) if o.nom == escale), None
+            )
+
         plan = planner.construire(
             catalogue,
             depart,
@@ -184,6 +197,7 @@ async def planner_plan(
             vers_surface=vers_surface,
             parking_depart=parking_depart,
             parking_arrivee=parking_arrivee,
+            escale=orbite_escale,
         )
         if plan is None:
             return {

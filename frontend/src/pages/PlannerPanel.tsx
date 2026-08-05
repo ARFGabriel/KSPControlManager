@@ -66,7 +66,17 @@ export function PlannerPanel() {
   const [arrivee, setArrivee] = useState("Duna");
   const [depuisSurface, setDepuisSurface] = useState(true);
   const [versSurface, setVersSurface] = useState(false);
+  const [escale, setEscale] = useState("");
+  const [escales, setEscales] = useState<{ nom: string; corps: string }[]>([]);
   const [plan, setPlan] = useState<PlanResult | null>(null);
+
+  // Escales possibles : les engins déjà en orbite autour du corps de départ.
+  useEffect(() => {
+    fetch(apiUrl("/api/planner/cibles"))
+      .then((r) => r.json())
+      .then((d) => setEscales(d.cibles ?? []))
+      .catch(() => setEscales([]));
+  }, []);
 
   useEffect(() => {
     fetch(apiUrl("/api/planner/bodies"))
@@ -86,15 +96,19 @@ export function PlannerPanel() {
       depuis_surface: String(depuisSurface),
       vers_surface: String(versSurface),
     });
+    if (escale) params.set("escale", escale);
     fetch(apiUrl(`/api/planner/plan?${params}`))
       .then((r) => r.json())
       .then(setPlan)
       .catch(() => setPlan(null));
-  }, [depart, arrivee, depuisSurface, versSurface]);
+  }, [depart, arrivee, depuisSurface, versSurface, escale]);
 
   // Toute destination du système est atteignable : l'itinéraire se charge
   // d'enchaîner les étapes intermédiaires.
   const destinations = corps.filter((b) => b.parent && b.name !== depart);
+
+  // Une escale n'a de sens que sur un engin déjà en orbite du corps de départ.
+  const escalesPossibles = escales.filter((e) => e.corps === depart);
 
   return (
     <Panel
@@ -126,6 +140,20 @@ export function PlannerPanel() {
             ))}
           </select>
         </label>
+
+        {escalesPossibles.length > 0 && (
+          <label>
+            Escale
+            <select value={escale} onChange={(e) => setEscale(e.target.value)}>
+              <option value="">aucune</option>
+              {escalesPossibles.map((e) => (
+                <option key={e.nom} value={e.nom}>
+                  {e.nom}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       <div className="planner-options">
