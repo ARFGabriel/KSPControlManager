@@ -7,55 +7,64 @@ interface PlannerBody {
   name: string;
   parent: string | null;
   low_orbit: number;
-  inclination: number;
-  eccentricity: number;
 }
 
-interface Burn {
-  label: string;
+interface Etape {
+  genre: string;
+  titre: string;
   delta_v: number;
-  note: string;
+  depuis: string;
+  vers: string;
+  duree: number;
+  angle_de_phase: number | null;
+  periode_synodique: number;
+  detail: string;
+  approximatif: boolean;
 }
 
-interface TransferResult {
+interface Fenetre {
+  recurrente?: boolean;
+  angle_actuel?: number;
+  angle_vise?: number;
+  attente?: number;
+  note?: string;
+  date_depart?: { texte: string };
+  date_actuelle?: { texte: string };
+}
+
+interface PlanResult {
   possible: boolean;
   raison?: string;
   source?: string;
-  delta_v_ejection: number;
-  delta_v_capture: number;
-  delta_v_total: number;
-  duree_transfert: number;
-  angle_de_phase: number;
-  periode_synodique: number;
-  parking_depart: number;
-  parking_arrivee: number;
-  burns: Burn[];
+  itineraire: string[];
+  etapes: Etape[];
   avertissements: string[];
+  delta_v_total: number;
+  duree_totale: number;
+  fenetre: Fenetre | null;
 }
+
+const COULEURS: Record<string, string> = {
+  ascension: "var(--red)",
+  transfert: "var(--cyan)",
+  capture: "var(--green)",
+  evasion: "var(--amber)",
+  descente: "var(--red)",
+};
 
 function apiUrl(path: string): string {
   const host = location.port === "5173" ? `${location.hostname}:8000` : location.host;
   return `${location.protocol}//${host}${path}`;
 }
 
-/** Destinations atteignables depuis un corps : ses frères et ses lunes. */
-function destinations(corps: PlannerBody[], depart: string): PlannerBody[] {
-  const source = corps.find((b) => b.name === depart);
-  if (!source) return [];
-  return corps.filter(
-    (b) =>
-      b.name !== depart &&
-      ((source.parent && b.parent === source.parent) || b.parent === depart)
-  );
-}
-
 export function PlannerPanel() {
   const [corps, setCorps] = useState<PlannerBody[]>([]);
   const [source, setSource] = useState("");
   const [depart, setDepart] = useState("Kerbin");
-  const [arrivee, setArrivee] = useState("Mun");
-  const [parking, setParking] = useState(100);
-  const [plan, setPlan] = useState<TransferResult | null>(null);
+  const [arrivee, setArrivee] = useState("Duna");
+  const [depuisSurface, setDepuisSurface] = useState(true);
+  const [versSurface, setVersSurface] = useState(false);
+  const [plan, setPlan] = useState<PlanResult | null>(null);
 
   useEffect(() => {
     fetch(apiUrl("/api/planner/bodies"))
@@ -68,30 +77,26 @@ export function PlannerPanel() {
   }, []);
 
   useEffect(() => {
-    if (!depart || !arrivee) return;
+    if (!depart || !arrivee || depart === arrivee) return;
     const params = new URLSearchParams({
       depart,
       arrivee,
-      parking_depart: String(parking * 1000),
+      depuis_surface: String(depuisSurface),
+      vers_surface: String(versSurface),
     });
-    fetch(apiUrl(`/api/planner/transfer?${params}`))
+    fetch(apiUrl(`/api/planner/plan?${params}`))
       .then((r) => r.json())
       .then(setPlan)
       .catch(() => setPlan(null));
-  }, [depart, arrivee, parking]);
+  }, [depart, arrivee, depuisSurface, versSurface]);
 
-  const cibles = destinations(corps, depart);
-
-  // Si la destination courante n'est plus atteignable, on prend la première.
-  useEffect(() => {
-    if (cibles.length && !cibles.some((c) => c.name === arrivee)) {
-      setArrivee(cibles[0].name);
-    }
-  }, [cibles, arrivee]);
+  // Toute destination du système est atteignable : l'itinéraire se charge
+  // d'enchaîner les étapes intermédiaires.
+  const destinations = corps.filter((b) => b.parent && b.name !== depart);
 
   return (
     <Panel
-      title="Planificateur"
+      title="Planificateur de mission"
       extra={<span>{source === "jeu" ? "données du jeu" : source}</span>}
       grandir
     >
@@ -112,23 +117,31 @@ export function PlannerPanel() {
         <label>
           Destination
           <select value={arrivee} onChange={(e) => setArrivee(e.target.value)}>
-            {cibles.map((b) => (
+            {destinations.map((b) => (
               <option key={b.name} value={b.name}>
                 {b.name}
               </option>
             ))}
           </select>
         </label>
+      </div>
 
+      <div className="planner-options">
         <label>
-          Orbite de départ
-          <select value={parking} onChange={(e) => setParking(Number(e.target.value))}>
-            {[80, 100, 150, 200, 300].map((km) => (
-              <option key={km} value={km}>
-                {km} km
-              </option>
-            ))}
-          </select>
+          <input
+            type="checkbox"
+            checked={depuisSurface}
+            onChange={(e) => setDepuisSurface(e.target.checked)}
+          />
+          Décoller du sol
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={versSurface}
+            onChange={(e) => setVersSurface(e.target.checked)}
+          />
+          Se poser à l'arrivée
         </label>
       </div>
 
@@ -136,35 +149,74 @@ export function PlannerPanel() {
 
       {plan?.possible && (
         <>
+          <div className="planner-route">
+            {plan.itineraire.map((corpsNom, i) => (
+              <span key={i}>
+                {i > 0 && <span className="fleche"> → </span>}
+                {corpsNom}
+              </span>
+            ))}
+          </div>
+
           <Stat
-            label="Δv total nécessaire"
+            label="Δv total de la mission"
             value={`${f.num(plan.delta_v_total, 0)} m/s`}
             tone="big"
           />
-          {plan.burns.map((b, i) => (
-            <Stat
-              key={i}
-              label={b.label}
-              value={`${f.num(b.delta_v, 0)} m/s`}
-              tone={i === 0 ? "accent" : ""}
-            />
-          ))}
 
-          <div style={{ height: "0.4rem" }} />
-          <Stat
-            label="Angle de phase au départ"
-            value={`${f.num(plan.angle_de_phase, 2)}°`}
-            tone="good"
-          />
-          <Stat label="Durée du trajet" value={f.joursKerbals(plan.duree_transfert)} />
-          <Stat
-            label="Fenêtre de tir tous les"
-            value={
-              isFinite(plan.periode_synodique)
-                ? f.joursKerbals(plan.periode_synodique)
-                : "—"
-            }
-          />
+          {/* Fenêtre de tir : uniquement quand le jeu fournit les positions. */}
+          {plan.fenetre?.date_depart && (
+            <div className="planner-fenetre">
+              <div className="titre">Prochaine fenêtre de tir</div>
+              <div className="date">{plan.fenetre.date_depart.texte}</div>
+              <div className="sous">
+                dans {f.joursKerbals(plan.fenetre.attente ?? 0)} · angle de
+                phase {f.num(plan.fenetre.angle_actuel ?? 0, 1)}° →{" "}
+                {f.num(plan.fenetre.angle_vise ?? 0, 1)}°
+              </div>
+            </div>
+          )}
+
+          {plan.fenetre?.recurrente && (
+            <div className="planner-fenetre">
+              <div className="titre">Fenêtre de tir</div>
+              <div className="sous">{plan.fenetre.note}</div>
+            </div>
+          )}
+
+          <div className="planner-etapes">
+            {plan.etapes.map((e, i) => (
+              <div key={i} className="planner-etape">
+                <span
+                  className="puce"
+                  style={{ background: COULEURS[e.genre] ?? "var(--dim)" }}
+                />
+                <div className="corps">
+                  <div className="ligne">
+                    <span className="titre">{e.titre}</span>
+                    <span className="dv">
+                      {f.num(e.delta_v, 0)} m/s
+                      {e.approximatif && <span className="approx"> ≈</span>}
+                    </span>
+                  </div>
+                  {e.detail && <div className="detail">{e.detail}</div>}
+                  {e.duree > 0 && (
+                    <div className="detail">
+                      trajet : {f.joursKerbals(e.duree)}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {plan.duree_totale > 0 && (
+            <Stat
+              label="Durée totale du voyage"
+              value={f.joursKerbals(plan.duree_totale)}
+              tone="accent"
+            />
+          )}
 
           {plan.avertissements.length > 0 && (
             <div className="planner-avert">
@@ -173,6 +225,10 @@ export function PlannerPanel() {
               ))}
             </div>
           )}
+
+          <p className="radio-hint" style={{ marginTop: "0.5rem" }}>
+            ≈ : valeur empirique, dépendante du vaisseau et du profil de vol.
+          </p>
         </>
       )}
     </Panel>

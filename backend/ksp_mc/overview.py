@@ -13,6 +13,7 @@ correspondantes levent au lieu de renvoyer zero.
 from __future__ import annotations
 
 import logging
+import math
 import time
 
 from .telemetry.source import safe
@@ -26,6 +27,20 @@ _cache_at = 0.0
 RAD_TO_DEG = 57.29577951308232
 
 
+def _nombre(valeur, defaut: float = 0.0) -> float:
+    """Nettoie une valeur numerique venant du jeu.
+
+    Les vaisseaux poses au sol renvoient NaN pour leur apoapside. Or NaN n'est
+    pas du JSON valide : le navigateur echouerait a lire toute la reponse, pas
+    seulement ce champ.
+    """
+    try:
+        nombre = float(valeur)
+    except (TypeError, ValueError):
+        return defaut
+    return nombre if math.isfinite(nombre) else defaut
+
+
 def _vessel_entry(vessel) -> dict:
     """Resume d'un vaisseau pour la liste de flotte."""
     orbit = safe(lambda: vessel.orbit)
@@ -37,11 +52,13 @@ def _vessel_entry(vessel) -> dict:
         "situation": _enum(safe(lambda: vessel.situation)),
         "body": body,
         "crew_count": safe(lambda: vessel.crew_count, 0),
-        "met": safe(lambda: vessel.met, 0.0),
-        "apoapsis": safe(lambda: orbit.apoapsis_altitude, 0.0) if orbit else 0.0,
-        "periapsis": safe(lambda: orbit.periapsis_altitude, 0.0) if orbit else 0.0,
-        "inclination": (safe(lambda: orbit.inclination, 0.0) * RAD_TO_DEG) if orbit else 0.0,
-        "period": safe(lambda: orbit.period, 0.0) if orbit else 0.0,
+        "met": _nombre(safe(lambda: vessel.met, 0.0)),
+        "apoapsis": _nombre(safe(lambda: orbit.apoapsis_altitude, 0.0)) if orbit else 0.0,
+        "periapsis": _nombre(safe(lambda: orbit.periapsis_altitude, 0.0)) if orbit else 0.0,
+        "inclination": (
+            _nombre(safe(lambda: orbit.inclination, 0.0)) * RAD_TO_DEG if orbit else 0.0
+        ),
+        "period": _nombre(safe(lambda: orbit.period, 0.0)) if orbit else 0.0,
     }
 
 

@@ -162,6 +162,63 @@ async def planner_transfer(
     return data
 
 
+@app.get("/api/planner/plan")
+async def planner_plan(
+    depart: str,
+    arrivee: str,
+    depuis_surface: bool = False,
+    vers_surface: bool = False,
+    parking_depart: float | None = None,
+    parking_arrivee: float | None = None,
+) -> dict:
+    """Plan de mission complet : itineraire, etapes, dates de depart."""
+    conn = _connexion_jeu()
+
+    def travail() -> dict:
+        catalogue = planner.catalogue(conn)
+        plan = planner.construire(
+            catalogue,
+            depart,
+            arrivee,
+            depuis_surface=depuis_surface,
+            vers_surface=vers_surface,
+            parking_depart=parking_depart,
+            parking_arrivee=parking_arrivee,
+        )
+        if plan is None:
+            return {
+                "possible": False,
+                "raison": f"Aucun itineraire entre {depart} et {arrivee}.",
+            }
+
+        data = asdict(plan)
+        data["possible"] = True
+        data["source"] = catalogue.source
+        data["delta_v_total"] = plan.delta_v_total
+        data["duree_totale"] = plan.duree_totale
+        # Les avertissements se repetent d'une etape a l'autre.
+        data["avertissements"] = list(dict.fromkeys(plan.avertissements))
+
+        # Fenetre de tir : seulement si le jeu est la, car il faut la position
+        # reelle des corps. Sans lui, on ne montre aucune date plutot qu'une
+        # date fausse.
+        data["fenetre"] = None
+        if conn is not None:
+            premier = next(
+                (e for e in plan.etapes
+                 if e.genre == "transfert" and e.angle_de_phase is not None),
+                None,
+            )
+            if premier is not None:
+                data["fenetre"] = planner.prochaine_fenetre(
+                    conn, catalogue, premier.depuis, premier.vers,
+                    premier.angle_de_phase,
+                )
+        return data
+
+    return await asyncio.to_thread(travail)
+
+
 @app.get("/api/radio/status")
 async def radio_status() -> dict:
     return radio.status()
