@@ -5,13 +5,14 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import overview
+from . import overview, planner
 from .config import PROJECT_DIR, settings
 from .hub import hub
 from .radio.service import radio
@@ -99,6 +100,65 @@ async def api_overview() -> dict:
 
     data = await asyncio.to_thread(overview.cached, source.conn)
     data["available"] = "error" not in data
+    return data
+
+
+def _connexion_jeu():
+    """Connexion kRPC si le jeu est la, pour lire les vrais parametres des
+    corps plutot que la table interne."""
+    from .telemetry.krpc_source import KrpcSource
+
+    source = hub.source
+    if isinstance(source, KrpcSource) and source.conn is not None:
+        return source.conn
+    return None
+
+
+@app.get("/api/planner/bodies")
+async def planner_bodies() -> dict:
+    catalogue = await asyncio.to_thread(planner.catalogue, _connexion_jeu())
+    return {
+        "source": catalogue.source,
+        "bodies": [
+            {
+                "name": b.name,
+                "parent": b.parent,
+                "radius": b.radius,
+                "atmosphere": b.atmosphere,
+                "low_orbit": b.low_orbit(),
+                "inclination": b.inclination,
+                "eccentricity": b.eccentricity,
+                "orbit_radius": b.orbit_radius,
+            }
+            for b in sorted(catalogue.bodies.values(), key=lambda x: x.orbit_radius)
+        ],
+    }
+
+
+@app.get("/api/planner/transfer")
+async def planner_transfer(
+    depart: str,
+    arrivee: str,
+    parking_depart: float | None = None,
+    parking_arrivee: float | None = None,
+) -> dict:
+    catalogue = await asyncio.to_thread(planner.catalogue, _connexion_jeu())
+    transfert = planner.calculer(
+        catalogue, depart, arrivee, parking_depart, parking_arrivee
+    )
+    if transfert is None:
+        return {
+            "possible": False,
+            "raison": (
+                f"Aucun transfert direct entre {depart} et {arrivee}. Le "
+                f"calcul ne traite que deux corps de même parent, ou un corps "
+                f"vers l'une de ses lunes."
+            ),
+        }
+
+    data = asdict(transfert)
+    data["possible"] = True
+    data["source"] = catalogue.source
     return data
 
 

@@ -7,6 +7,7 @@ import * as f from "../format";
 import type { Telemetry } from "../types";
 import { useOverview } from "../useOverview";
 import { CrewPanel, FleetPanel, ProgramPanel } from "./FleetPanel";
+import { PlannerPanel } from "./PlannerPanel";
 
 /** Centre spatial : vue d'ensemble du programme. */
 export function SpaceCenterPage({ t }: { t: Telemetry }) {
@@ -24,6 +25,7 @@ export function SpaceCenterPage({ t }: { t: Telemetry }) {
       </div>
 
       <div className="column">
+        <PlannerPanel />
         <FleetPanel overview={overview} titre="Flotte en vol" grandir />
       </div>
 
@@ -76,16 +78,14 @@ export function EditorPage({ t }: { t: Telemetry }) {
 
   return (
     <div className="dashboard deux">
+      {/* Le planificateur a toute sa place ici : c'est en construisant qu'on
+          a besoin de savoir combien de Δv la mission va réclamer. */}
       <div className="column">
-        <Panel title={`Construction — ${atelier}`} grandir>
+        <PlannerPanel />
+        <Panel title={`Construction — ${atelier}`}>
           <div className="empty">
-            kRPC n'expose pas le contenu de l'éditeur.
-            <br />
-            Le Δv et le TWR par étage pendant la construction demanderont
-            d'étendre le mod du jeu, qui a accès à ces données.
-            <br />
-            <br />
-            En attendant, le sol reste joignable pour préparer la mission.
+            Le Δv par étage pendant la construction demandera d'étendre le mod
+            du jeu : kRPC n'expose pas le contenu de l'éditeur.
           </div>
         </Panel>
       </div>

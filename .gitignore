@@ -28,6 +28,11 @@ obj/
 *.user
 *.suo
 
+# --- Donnees generees depuis le jeu ---
+# Le catalogue des corps est relu depuis KSP a chaque connexion : c'est un
+# cache local, qui differerait avec un mod redimensionnant le systeme.
+backend/donnees/
+
 # --- Divers ---
 .DS_Store
 Thumbs.db

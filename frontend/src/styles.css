@@ -523,6 +523,55 @@ svg text { font-family: var(--mono); }
 .radio-input button:disabled,
 .radio-input input:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* ---------- Planificateur ---------- */
+.planner-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
+}
+
+.planner-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  color: var(--dim);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.planner-form select {
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  padding: 0.25rem 0.4rem;
+  background: #05080b;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+.planner-form select:focus {
+  outline: none;
+  border-color: rgba(63, 184, 212, 0.6);
+}
+
+.planner-avert {
+  margin-top: 0.6rem;
+  padding: 0.45rem 0.6rem;
+  border-left: 2px solid var(--amber);
+  background: rgba(255, 176, 0, 0.06);
+}
+
+.planner-avert p {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  color: var(--amber);
+  line-height: 1.4;
+}
+
+.planner-avert p:last-child { margin-bottom: 0; }
+
 /* Le panneau radio est un cas particulier : sa zone de conversation doit
    occuper toute la hauteur disponible, donc son corps est un flex column. */
 .panel.radio > .body {
