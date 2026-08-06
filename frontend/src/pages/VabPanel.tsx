@@ -24,6 +24,7 @@ interface Vaisseau {
   delta_v_total_vide: number;
   etages: EtageVab[];
   ressources: { nom: string; quantite: number; masse: number }[];
+  avertissements: string[];
 }
 
 function apiUrl(path: string): string {
@@ -112,14 +113,13 @@ export function VabPanel({ atelier }: { atelier: string }) {
             </div>
           )}
 
-          {/* Le TWR du premier étage décide si la fusée décolle tout court. */}
-          {nav.etages.length > 0 && nav.etages[0].twr < 1 && (
+          {/* Défauts de conception : chacun vient d'une panne réellement
+              rencontrée en vol. */}
+          {nav.avertissements?.length > 0 && (
             <div className="planner-avert">
-              <p>
-                Le premier étage a un TWR de {f.num(nav.etages[0].twr, 2)} :
-                cette fusée ne quittera pas le pas de tir. Il en faut au moins
-                1,2 pour décoller correctement.
-              </p>
+              {nav.avertissements.map((a, i) => (
+                <p key={i}>{a}</p>
+              ))}
             </div>
           )}
 

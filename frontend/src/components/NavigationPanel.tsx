@@ -1,3 +1,4 @@
+import { NodePlanner } from "./NodePlanner";
 import { Panel, Stat } from "./ui";
 import * as f from "../format";
 import type { Guidage } from "../types";
@@ -100,6 +101,8 @@ export function NavigationPanel({ g }: { g: Guidage | null }) {
           )}
         </>
       )}
+
+      <NodePlanner noeudExistant={g.noeud} />
 
       {g.alertes.length > 0 && (
         <div className="planner-avert" style={{ borderLeftColor: "var(--red)" }}>

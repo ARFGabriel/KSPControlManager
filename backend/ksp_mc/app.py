@@ -314,6 +314,47 @@ async def vab_brut() -> dict:
     return vab.brut()
 
 
+@app.get("/api/noeud/cibles")
+async def noeud_cibles() -> dict:
+    """Cibles atteignables par un transfert direct depuis l'orbite actuelle."""
+    from .planner import noeud as mod_noeud
+
+    conn = _connexion_jeu()
+    if conn is None:
+        return {"disponible": False, "cibles": []}
+    return {
+        "disponible": True,
+        "cibles": await asyncio.to_thread(mod_noeud.cibles_possibles, conn),
+    }
+
+
+@app.post("/api/noeud/poser")
+async def noeud_poser(cible: str, simuler: bool = False) -> dict:
+    """Calcule le transfert, et l'ecrit dans la partie sauf si `simuler`.
+
+    L'ecriture dans le jeu est une action volontaire du pilote : le
+    planificateur ne pose jamais de noeud de lui-meme.
+    """
+    from .planner import noeud as mod_noeud
+
+    conn = _connexion_jeu()
+    if conn is None:
+        return {"possible": False, "raison": "Pas de liaison avec le jeu."}
+
+    action = mod_noeud.planifier if simuler else mod_noeud.poser
+    return await asyncio.to_thread(action, conn, cible)
+
+
+@app.post("/api/noeud/effacer")
+async def noeud_effacer() -> dict:
+    from .planner import noeud as mod_noeud
+
+    conn = _connexion_jeu()
+    if conn is None:
+        return {"retires": 0}
+    return {"retires": await asyncio.to_thread(mod_noeud.effacer, conn)}
+
+
 @app.get("/api/radio/status")
 async def radio_status() -> dict:
     return radio.status()

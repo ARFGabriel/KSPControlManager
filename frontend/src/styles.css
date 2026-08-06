@@ -563,6 +563,93 @@ svg text { font-family: var(--mono); }
 
 .nav-ecart .fill { height: 100%; transition: width 0.2s linear; }
 
+/* ---------- Pose de nœud ---------- */
+.node-planner {
+  margin-top: 0.6rem;
+  padding-top: 0.5rem;
+  border-top: 1px dotted rgba(97, 120, 138, 0.25);
+}
+
+.node-planner .tete {
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 0.35rem;
+}
+
+.node-planner .ligne {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+}
+
+.node-planner select {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  padding: 0.25rem 0.4rem;
+  background: #05080b;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+.node-planner button {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.7rem;
+  background: var(--panel-2);
+  color: var(--dim);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.node-planner button:hover:not(:disabled) { color: var(--text); }
+.node-planner button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Écrire dans la partie du joueur mérite un bouton qui se distingue. */
+.node-planner button.poser {
+  flex: 1;
+  color: var(--amber);
+  border-color: rgba(255, 176, 0, 0.5);
+  background: rgba(255, 176, 0, 0.08);
+}
+
+.node-planner .apercu {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.5rem;
+  font-size: 0.8rem;
+  color: var(--dim);
+  margin-bottom: 0.4rem;
+}
+
+.node-planner .apercu b {
+  color: var(--amber);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.node-planner .raison {
+  margin: 0.3rem 0;
+  font-size: 0.78rem;
+  color: var(--amber);
+  line-height: 1.4;
+}
+
+.node-planner .succes {
+  margin: 0.3rem 0;
+  font-size: 0.8rem;
+  color: var(--green);
+}
+
 /* ---------- Planificateur ---------- */
 .planner-form {
   display: grid;

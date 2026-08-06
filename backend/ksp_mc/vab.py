@@ -77,9 +77,64 @@ def enregistrer(charge: dict) -> None:
         "etages": [asdict(e) for e in etages],
         "delta_v_total": total_delta_v(etages),
         "delta_v_total_vide": total_delta_v(sous_vide),
+        "avertissements": _controler(charge, pieces, densites, etages),
         "ressources": _resume_ressources(pieces, densites),
     }
     _recu_a = time.monotonic()
+
+
+def _controler(charge: dict, pieces, densites, etages) -> list[str]:
+    """Defauts de conception qui condamnent une mission.
+
+    Chacun de ces controles vient d'une panne reellement rencontree : une
+    sonde devenue debris faute de production electrique, un vaisseau muet
+    faute d'antenne, un lanceur trop lourd pour decoller.
+    """
+    eq = charge.get("equipements") or {}
+    avertissements: list[str] = []
+
+    charge_elec = sum(
+        p.resources.get("ElectricCharge", 0.0) for p in pieces
+    )
+    production = eq.get("panneaux_solaires", 0) + eq.get("generateurs", 0)
+
+    if charge_elec > 0 and production == 0:
+        detail = ""
+        if eq.get("alternateurs", 0) > 0:
+            detail = (" Les alternateurs des moteurs ne comptent pas : ils ne "
+                      "produisent que moteur allume.")
+        avertissements.append(
+            f"Aucune production electrique pour {charge_elec:.0f} unites de "
+            f"batterie. Une fois vides, plus aucun controle -- le vaisseau "
+            f"devient un debris irrecuperable.{detail}"
+        )
+
+    if eq.get("antennes", 0) == 0:
+        avertissements.append(
+            "Aucune antenne : pas de transmission scientifique, et une sonde "
+            "sans equipage sera hors liaison."
+        )
+
+    if eq.get("places_equipage", 0) > 0 and eq.get("parachutes", 0) == 0:
+        avertissements.append(
+            f"{eq['places_equipage']} place(s) d'equipage mais aucun parachute : "
+            f"pas de retour possible."
+        )
+
+    if etages:
+        premier = etages[0]
+        if 0 < premier.twr < 1.1:
+            avertissements.append(
+                f"TWR de {premier.twr:.2f} au decollage : trop juste pour "
+                f"monter correctement, viser au moins 1,2."
+            )
+        elif premier.twr >= 1.1 and premier.twr > 2.5:
+            avertissements.append(
+                f"TWR de {premier.twr:.2f} au decollage : tres eleve, une "
+                f"partie de la poussee sera perdue en trainee."
+            )
+
+    return avertissements
 
 
 def brut() -> dict:

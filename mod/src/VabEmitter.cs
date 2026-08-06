@@ -97,6 +97,58 @@ namespace KSP_AIAssistant
 
             json.Append("],");
             json.Append(LignesErgolEnJson(navire));
+            json.Append(",");
+            json.Append(EquipementsEnJson(navire));
+            json.Append("}");
+            return json.ToString();
+        }
+
+        /// <summary>
+        /// Recensement des équipements dont l'absence condamne une mission.
+        ///
+        /// Ces trois oublis sont les plus courants et les plus coûteux : une
+        /// sonde sans production électrique meurt dès ses batteries vides et
+        /// devient un débris incontrôlable ; sans antenne elle ne transmet
+        /// rien ; sans parachute un équipage ne rentre pas.
+        ///
+        /// On compte ici, le backend juge.
+        /// </summary>
+        private string EquipementsEnJson(ShipConstruct navire)
+        {
+            int panneaux = 0, generateurs = 0, antennes = 0, parachutes = 0;
+            int alternateurs = 0, places = 0;
+
+            foreach (Part piece in navire.parts)
+            {
+                places += piece.CrewCapacity;
+
+                if (piece.Modules == null) continue;
+                for (int i = 0; i < piece.Modules.Count; i++)
+                {
+                    PartModule m = piece.Modules[i];
+                    if (m == null) continue;
+                    switch (m.moduleName)
+                    {
+                        case "ModuleDeployableSolarPanel": panneaux++; break;
+                        // Les RTG et générateurs à carburant produisent en continu.
+                        case "ModuleGenerator": generateurs++; break;
+                        // L'alternateur ne produit que moteur allumé : il ne
+                        // sauve pas une sonde en vol balistique.
+                        case "ModuleAlternator": alternateurs++; break;
+                        case "ModuleDataTransmitter": antennes++; break;
+                        case "ModuleParachute": parachutes++; break;
+                    }
+                }
+            }
+
+            StringBuilder json = new StringBuilder(160);
+            json.Append("\"equipements\":{");
+            json.AppendFormat("\"panneaux_solaires\":{0},", panneaux);
+            json.AppendFormat("\"generateurs\":{0},", generateurs);
+            json.AppendFormat("\"alternateurs\":{0},", alternateurs);
+            json.AppendFormat("\"antennes\":{0},", antennes);
+            json.AppendFormat("\"parachutes\":{0},", parachutes);
+            json.AppendFormat("\"places_equipage\":{0}", places);
             json.Append("}");
             return json.ToString();
         }
