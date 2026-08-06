@@ -14,7 +14,7 @@ import time
 
 import krpc
 
-from . import deltav
+from . import deltav, navigation
 from .schema import OrbitInfo, ResourceInfo, StageInfo, Telemetry
 from .source import TelemetrySource, safe
 
@@ -199,6 +199,21 @@ class KrpcSource(TelemetrySource):
         cold["body"] = safe(lambda: vessel.orbit.body.name, "")
         cold["crew_count"] = safe(lambda: vessel.crew_count, 0)
         cold["surface_gravity"] = safe(lambda: vessel.orbit.body.surface_gravity, 9.81)
+        cold["specific_impulse"] = safe(lambda: vessel.specific_impulse, 0.0)
+
+        # Parametres du corps survole : necessaires au calcul de
+        # circularisation, et ils ne changent qu'en changeant de sphere
+        # d'influence.
+        corps = safe(lambda: vessel.orbit.body)
+        cold["mu"] = safe(lambda: corps.gravitational_parameter, 0.0) if corps else 0.0
+        cold["rayon_corps"] = safe(lambda: corps.equatorial_radius, 0.0) if corps else 0.0
+        cold["atmosphere"] = (
+            safe(lambda: corps.atmosphere_depth, 0.0)
+            if corps and safe(lambda: corps.has_atmosphere, False)
+            else 0.0
+        )
+
+        cold["noeud"] = self._lire_noeud(vessel, corps)
 
         # --- Delta-v ---
         # Lu ici plutot qu'en stream : KSP peut ne pas l'avoir encore calcule
@@ -252,6 +267,34 @@ class KrpcSource(TelemetrySource):
 
         self._cold = cold
         self._cold_at = time.monotonic()
+
+    def _lire_noeud(self, vessel, corps) -> dict | None:
+        """Premier noeud de manoeuvre, s'il y en a un.
+
+        L'ecart d'attitude se mesure entre le nez du vaisseau et le vecteur de
+        poussee restant, tous deux exprimes dans le meme repere non tournant --
+        sinon la rotation du corps fausserait l'angle.
+        """
+        noeuds = safe(lambda: vessel.control.nodes, []) or []
+        if not noeuds:
+            return None
+
+        noeud = noeuds[0]
+        data = {
+            "delta_v": safe(lambda: noeud.remaining_delta_v, 0.0),
+            "temps": safe(lambda: noeud.time_to, 0.0),
+            "ecart": 0.0,
+        }
+
+        if corps is not None:
+            repere = safe(lambda: corps.non_rotating_reference_frame)
+            if repere is not None:
+                nez = safe(lambda: vessel.direction(repere))
+                vise = safe(lambda: noeud.remaining_burn_vector(repere))
+                if nez and vise:
+                    data["ecart"] = navigation.angle_entre(nez, vise)
+
+        return data
 
     def _refresh_stages(self, vessel, current_stage: int) -> None:
         """Recalcule le detail par etage, a cadence reduite.
@@ -346,7 +389,7 @@ class KrpcSource(TelemetrySource):
             dv_total = 0.0
             dv_available = False
 
-        return Telemetry(
+        etat = Telemetry(
             connected=True,
             source=self.name,
             timestamp=time.time(),
@@ -393,10 +436,20 @@ class KrpcSource(TelemetrySource):
                 time_to_periapsis=self._get("orbit_time_to_periapsis"),
                 semi_major_axis=self._get("orbit_semi_major_axis"),
             ),
+            specific_impulse=cold.get("specific_impulse", 0.0),
             comm_available=cold.get("comm_available", False),
             comm_can_communicate=cold.get("can_communicate", True),
             comm_signal_strength=cold.get("signal_strength", 1.0),
         )
+
+        etat.guidage = navigation.construire(
+            etat,
+            mu=cold.get("mu", 0.0),
+            rayon_corps=cold.get("rayon_corps", 0.0),
+            atmosphere=cold.get("atmosphere", 0.0),
+            noeud=cold.get("noeud"),
+        )
+        return etat
 
 
 def _enum_name(value) -> str:

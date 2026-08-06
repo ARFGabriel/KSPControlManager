@@ -17,6 +17,7 @@ import math
 import time
 
 from ..config import settings
+from . import navigation
 from .schema import OrbitInfo, ResourceInfo, StageInfo, Telemetry
 from .source import TelemetrySource
 
@@ -319,7 +320,7 @@ class SimSource(TelemetrySource):
         orbit = self._orbit()
         situation = self._situation(orbit)
 
-        return Telemetry(
+        etat = Telemetry(
             connected=True,
             source=self.name,
             timestamp=time.time(),
@@ -367,10 +368,19 @@ class SimSource(TelemetrySource):
                 ResourceInfo(name="ElectricCharge", amount=180.0, maximum=200.0),
             ],
             orbit=orbit,
+            specific_impulse=stage.isp(self._pressure_atm()) if stage else 0.0,
             comm_available=True,
             comm_can_communicate=True,
             comm_signal_strength=max(0.2, 1.0 - self.alt / 4_000_000.0),
         )
+
+        # Le simulateur alimente le meme guidage que le jeu : c'est ce qui
+        # permet de mettre au point l'aide a la navigation, puis le pilote
+        # automatique, sans lancer KSP.
+        etat.guidage = navigation.construire(
+            etat, mu=MU_KERBIN, rayon_corps=R_KERBIN, atmosphere=ATMO_HEIGHT,
+        )
+        return etat
 
     def _situation(self, orbit: OrbitInfo) -> str:
         if not self.launched:

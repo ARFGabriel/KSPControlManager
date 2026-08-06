@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field, asdict
 from typing import Any
 
+from .navigation import Guidage
+
 
 @dataclass
 class OrbitInfo:
@@ -97,12 +99,17 @@ class Telemetry:
     # sans moteur, vaisseau tout juste charge). On distingue explicitement
     # "indisponible" de "zero" : afficher 0 m/s serait un mensonge.
     delta_v_available: bool = False
+    specific_impulse: float = 0.0    # s, situation courante
     current_stage: int = 0
 
     # --- detail ---
     stages: list[StageInfo] = field(default_factory=list)
     resources: list[ResourceInfo] = field(default_factory=list)
     orbit: OrbitInfo | None = None
+
+    # --- aide a la navigation ---
+    # Ce que ferait un pilote automatique, affiche plutot qu'execute.
+    guidage: Guidage | None = None
 
     # --- liaison ---
     # comm_available distingue "CommNet desactive ou vaisseau sans antenne"

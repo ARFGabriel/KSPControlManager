@@ -29,6 +29,22 @@ export interface ResourceInfo {
   maximum: number;
 }
 
+export interface Guidage {
+  phase: string;
+  consigne: string;
+  noeud: boolean;
+  noeud_delta_v: number;
+  noeud_temps: number;
+  noeud_duree: number;
+  noeud_allumage: number;
+  ecart_attitude: number;
+  circularisation_dv: number;
+  circularisation_duree: number;
+  assiette_cible: number;
+  assiette_ecart: number;
+  alertes: string[];
+}
+
 export interface Telemetry {
   connected: boolean;
   source: string;
@@ -68,9 +84,11 @@ export interface Telemetry {
   delta_v_available: boolean;
   current_stage: number;
 
+  specific_impulse: number;
   stages: StageInfo[];
   resources: ResourceInfo[];
   orbit: OrbitInfo | null;
+  guidage: Guidage | null;
 
   comm_available: boolean;
   comm_can_communicate: boolean;

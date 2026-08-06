@@ -523,6 +523,46 @@ svg text { font-family: var(--mono); }
 .radio-input button:disabled,
 .radio-input input:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* ---------- Navigation ---------- */
+.nav-consigne {
+  margin: 0 0 0.6rem;
+  padding: 0.45rem 0.6rem;
+  background: var(--panel-2);
+  border-left: 2px solid var(--cyan);
+  border-radius: 3px;
+  font-size: 0.92rem;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+/* Un allumage imminent doit sauter aux yeux sans qu'on lise la phrase. */
+.nav-consigne.urgent {
+  border-left-color: var(--amber);
+  background: rgba(255, 176, 0, 0.1);
+  color: var(--amber);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.nav-ecart { margin: 0.5rem 0 0.2rem; }
+
+.nav-ecart .head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--dim);
+  margin-bottom: 0.2rem;
+}
+
+.nav-ecart .track {
+  height: 0.5rem;
+  background: #05080b;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.nav-ecart .fill { height: 100%; transition: width 0.2s linear; }
+
 /* ---------- Planificateur ---------- */
 .planner-form {
   display: grid;

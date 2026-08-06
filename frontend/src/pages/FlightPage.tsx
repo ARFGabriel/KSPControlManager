@@ -1,4 +1,5 @@
 import { AttitudeIndicator } from "../components/AttitudeIndicator";
+import { NavigationPanel } from "../components/NavigationPanel";
 import { OrbitDiagram } from "../components/OrbitDiagram";
 import { RadioPanel } from "../components/RadioPanel";
 import { Bar, Panel, Stat } from "../components/ui";
@@ -19,7 +20,9 @@ export function FlightPage({ t }: { t: Telemetry }) {
           </div>
         </Panel>
 
-        <Panel title="Vol" grandir>
+        <NavigationPanel g={t.guidage} />
+
+        <Panel title="Vol">
           <Stat label="Altitude" value={f.distance(t.altitude)} tone="big" />
           <Stat label="Vitesse orbitale" value={f.speed(t.orbital_speed)} tone="big" />
           <Stat label="Vitesse surface" value={f.speed(t.speed)} />
