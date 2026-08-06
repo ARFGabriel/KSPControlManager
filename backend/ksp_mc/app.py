@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import overview, planner, vab
+from . import mission, overview, planner, rappels, science, vab
 from .config import PROJECT_DIR, settings
 from .hub import hub
 from .radio.service import radio
@@ -213,6 +213,14 @@ async def planner_plan(
         # Les avertissements se repetent d'une etape a l'autre.
         data["avertissements"] = list(dict.fromkeys(plan.avertissements))
 
+        # Le lien entre les deux outils : ce plan est-il a la portee de la
+        # fusee du moment ? Calcule ici plutot que dans le navigateur, pour
+        # que le VAB et le planificateur restent deux panneaux independants
+        # qui n'ont pas a se connaitre.
+        data["confrontation"] = mission.confronter(
+            plan, hub.latest, vab.dernier()
+        )
+
         # Fenetre de tir : seulement si le jeu est la, car il faut la position
         # reelle des corps. Sans lui, on ne montre aucune date plutot qu'une
         # date fausse.
@@ -353,6 +361,46 @@ async def noeud_effacer() -> dict:
     if conn is None:
         return {"retires": 0}
     return {"retires": await asyncio.to_thread(mod_noeud.effacer, conn)}
+
+
+@app.get("/api/science")
+async def api_science() -> dict:
+    """Experiences dont les donnees dorment a bord du vaisseau actif."""
+    conn = _connexion_jeu()
+    if conn is None:
+        return {
+            "disponible": False,
+            "raison": "Pas de liaison avec le jeu.",
+            "experiences": [],
+        }
+    return await asyncio.to_thread(science.cached, conn, hub.latest)
+
+
+@app.get("/api/rappels")
+async def rappels_lister() -> dict:
+    """Rappels de fenetre de tir, situes par rapport a la date du jeu."""
+    return rappels.lister(hub.latest.ut if hub.latest.connected else 0.0)
+
+
+@app.post("/api/rappels")
+async def rappels_ajouter(charge: dict) -> dict:
+    """Pose un rappel. Le planificateur fournit la date qu'il a calculee."""
+    try:
+        rappel = rappels.ajouter(
+            depart=str(charge.get("depart", "")),
+            arrivee=str(charge.get("arrivee", "")),
+            ut_depart=float(charge.get("ut_depart", 0.0)),
+            periode_synodique=float(charge.get("periode_synodique", 0.0) or 0.0),
+            note=str(charge.get("note", "")),
+        )
+    except (TypeError, ValueError) as exc:
+        return {"ok": False, "erreur": str(exc)}
+    return {"ok": True, "rappel": rappel}
+
+
+@app.delete("/api/rappels/{identifiant}")
+async def rappels_supprimer(identifiant: str) -> dict:
+    return {"ok": rappels.supprimer(identifiant)}
 
 
 @app.get("/api/radio/status")

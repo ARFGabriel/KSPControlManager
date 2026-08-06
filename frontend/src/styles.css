@@ -809,3 +809,238 @@ svg text { font-family: var(--mono); }
   min-height: 0;
   overflow: hidden;
 }
+
+/* ---------- Bandeau d'alertes ----------
+   Sous la barre superieure, visible quelle que soit la scene : une batterie
+   qui se vide et une fenetre de tir qui arrive sont des echeances, pas des
+   mesures. Rien ne s'affiche quand tout va bien. */
+.bandeau {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0.5rem 0.7rem 0;
+  flex: 0 0 auto;
+}
+
+.alerte {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 3px;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  border: 1px solid transparent;
+}
+
+.alerte .pastille {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: currentColor;
+  animation: pulsation 1.6s ease-in-out infinite;
+}
+
+@keyframes pulsation {
+  50% { opacity: 0.25; }
+}
+
+.alerte.danger {
+  color: var(--red);
+  border-color: rgba(255, 82, 82, 0.45);
+  background: rgba(255, 82, 82, 0.09);
+}
+
+.alerte.urgent {
+  color: var(--amber);
+  border-color: rgba(255, 176, 0, 0.5);
+  background: rgba(255, 176, 0, 0.09);
+}
+
+.alerte.info {
+  color: var(--cyan);
+  border-color: rgba(63, 184, 212, 0.4);
+  background: rgba(63, 184, 212, 0.07);
+}
+
+.alerte .fermer {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.55;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 0.2rem;
+}
+
+.alerte .fermer:hover { opacity: 1; }
+
+/* ---------- Veille : projection sous un panneau ---------- */
+.veille-ligne {
+  margin: 0.5rem 0 0;
+  padding-top: 0.4rem;
+  border-top: 1px dotted rgba(97, 120, 138, 0.25);
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: var(--dim);
+}
+
+.veille-ligne.critique {
+  color: var(--red);
+  border-top-color: rgba(255, 82, 82, 0.3);
+}
+
+/* ---------- Recoupement fusee / mission ---------- */
+.confront {
+  margin: 0.55rem 0;
+  padding: 0.5rem 0.65rem;
+  border-radius: 3px;
+  border: 1px solid rgba(97, 120, 138, 0.35);
+  background: rgba(97, 120, 138, 0.06);
+}
+
+.confront.ok     { border-color: rgba(53, 208, 127, 0.45); background: rgba(53, 208, 127, 0.06); }
+.confront.juste  { border-color: rgba(255, 176, 0, 0.5);   background: rgba(255, 176, 0, 0.06); }
+.confront.manque { border-color: rgba(255, 82, 82, 0.5);   background: rgba(255, 82, 82, 0.07); }
+
+.confront .entete {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-bottom: 0.35rem;
+}
+
+.confront .titre {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.confront.ok     .titre { color: var(--green); }
+.confront.juste  .titre { color: var(--amber); }
+.confront.manque .titre { color: var(--red); }
+
+.confront .origine {
+  font-size: 0.7rem;
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.confront .jauge {
+  height: 4px;
+  background: rgba(97, 120, 138, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 0.4rem;
+}
+
+.confront .jauge .fill {
+  height: 100%;
+  transition: width 0.3s ease;
+  background: var(--dim);
+}
+
+.confront.ok     .jauge .fill { background: var(--green); }
+.confront.juste  .jauge .fill { background: var(--amber); }
+.confront.manque .jauge .fill { background: var(--red); }
+
+.confront .verdict {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.confront .suggestion,
+.confront .note {
+  margin: 0.3rem 0 0;
+  font-size: 0.72rem;
+  color: var(--dim);
+  line-height: 1.4;
+}
+
+.confront-vide {
+  margin: 0.5rem 0;
+  font-size: 0.75rem;
+  color: var(--dim);
+  line-height: 1.4;
+}
+
+/* ---------- Bouton de rappel de fenetre ---------- */
+.planner-rappel {
+  margin-top: 0.4rem;
+  padding: 0.22rem 0.6rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--green);
+  background: rgba(53, 208, 127, 0.1);
+  border: 1px solid rgba(53, 208, 127, 0.45);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.planner-rappel:hover:not(:disabled) { background: rgba(53, 208, 127, 0.2); }
+
+.planner-rappel:disabled {
+  color: var(--dim);
+  border-color: rgba(97, 120, 138, 0.35);
+  background: none;
+  cursor: default;
+}
+
+/* ---------- Science a bord ---------- */
+.science-message {
+  margin: 0 0 0.45rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--cyan);
+}
+
+/* La liste peut etre longue sur un labo bien equipe : elle defile chez elle
+   plutot que de pousser la colonne hors de l'ecran. */
+.science-liste {
+  max-height: 11rem;
+  overflow-y: auto;
+}
+
+.science-ligne {
+  padding: 0.25rem 0;
+  border-bottom: 1px dotted rgba(97, 120, 138, 0.15);
+}
+
+.science-ligne:last-child { border-bottom: none; }
+
+.science-ligne .haut {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  align-items: baseline;
+}
+
+.science-ligne .sujet {
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.science-ligne .valeur {
+  color: var(--cyan);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.science-ligne .bas {
+  font-size: 0.7rem;
+  color: var(--dim);
+  line-height: 1.3;
+}
+
+.science-ligne .unique { color: var(--amber); }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import * as f from "../format";
+import { apiUrl } from "../api";
 
 interface Cible {
   nom: string;
@@ -18,11 +19,6 @@ interface Resultat {
   angle_actuel?: number;
   angle_vise?: number;
   altitude_cible?: number;
-}
-
-function apiUrl(path: string): string {
-  const host = location.port === "5173" ? `${location.hostname}:8000` : location.host;
-  return `${location.protocol}//${host}${path}`;
 }
 
 /**

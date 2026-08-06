@@ -37,6 +37,14 @@ DT = 0.05                     # pas d'integration, s
 LF_UNITS_PER_T = 90.0
 OX_UNITS_PER_T = 110.0
 
+# Reserve electrique. Le simulateur n'a ni panneau ni generateur : la batterie
+# se vide, comme sur une sonde mal concue. C'est volontaire -- sans une
+# grandeur qui derive vraiment, la projection de la veille n'aurait rien a
+# observer tant que KSP n'est pas lance.
+EC_MAX = 200.0
+EC_CONSOMMATION = 0.25        # unites par seconde de jeu
+EC_SUPPLEMENT_POUSSEE = 0.35  # de plus, moteur allume (pompes, pilotage)
+
 
 class _Stage:
     """Un etage : masse a vide, ergols, poussee et Isp."""
@@ -97,6 +105,7 @@ class SimSource(TelemetrySource):
         self.met = 0.0
         self.ut = 0.0
         self.throttle = 0.0
+        self.charge_elec = EC_MAX
         self.launched = False
         self._t0 = time.monotonic()
         self._last = self._t0
@@ -149,6 +158,11 @@ class SimSource(TelemetrySource):
 
     def _step(self, dt: float) -> None:
         self.ut += dt
+
+        # L'avionique consomme des le chargement, pas seulement en vol.
+        drain = EC_CONSOMMATION + EC_SUPPLEMENT_POUSSEE * self.throttle
+        self.charge_elec = max(0.0, self.charge_elec - drain * dt)
+
         if not self.launched:
             if time.monotonic() - self._t0 >= self.auto_launch_after:
                 self.launched = True
@@ -346,6 +360,7 @@ class SimSource(TelemetrySource):
             roll=0.0,
             static_pressure=P0 * self._pressure_atm(),
             atmosphere_density=rho,
+            atmosphere_depth=ATMO_HEIGHT,
             throttle=self.throttle,
             thrust=thrust_kn,
             available_thrust=available_kn,
@@ -365,7 +380,8 @@ class SimSource(TelemetrySource):
                              maximum=max(fuel_full * LF_UNITS_PER_T, 1e-6)),
                 ResourceInfo(name="Oxidizer", amount=fuel_left * OX_UNITS_PER_T,
                              maximum=max(fuel_full * OX_UNITS_PER_T, 1e-6)),
-                ResourceInfo(name="ElectricCharge", amount=180.0, maximum=200.0),
+                ResourceInfo(name="ElectricCharge", amount=self.charge_elec,
+                             maximum=EC_MAX),
             ],
             orbit=orbit,
             specific_impulse=stage.isp(self._pressure_atm()) if stage else 0.0,

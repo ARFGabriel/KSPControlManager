@@ -242,7 +242,7 @@ def duree_lisible(secondes: float) -> str:
         return "—"
     jours = secondes / JOUR
     if jours < 1:
-        return f"{secondes / 3600:.1f} h"
+        return f"{secondes / 3600:.1f} h".replace(".", ",")
     if jours < 426:
         return f"{jours:.0f} jours"
-    return f"{jours / 426:.1f} années ({jours:.0f} j)"
+    return f"{jours / 426:.1f} années ({jours:.0f} j)".replace(".", ",")

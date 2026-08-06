@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { apiUrl } from "./api";
 
 export interface FleetVessel {
   name: string;
@@ -33,11 +34,6 @@ export interface Overview {
   vessels: FleetVessel[];
   crew: Kerbal[];
   warnings: string[];
-}
-
-function apiUrl(path: string): string {
-  const host = location.port === "5173" ? `${location.hostname}:8000` : location.host;
-  return `${location.protocol}//${host}${path}`;
 }
 
 /**

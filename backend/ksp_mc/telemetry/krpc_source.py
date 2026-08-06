@@ -413,6 +413,7 @@ class KrpcSource(TelemetrySource):
             roll=self._get("roll"),
             static_pressure=self._get("static_pressure"),
             atmosphere_density=self._get("atmosphere_density"),
+            atmosphere_depth=cold.get("atmosphere", 0.0),
             throttle=self._get("throttle"),
             thrust=self._get("thrust") * N_TO_KN,
             available_thrust=available_thrust_kn,

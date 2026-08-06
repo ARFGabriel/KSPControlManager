@@ -12,6 +12,7 @@ from dataclasses import dataclass, field, asdict
 from typing import Any
 
 from .navigation import Guidage
+from .veille import Veille
 
 
 @dataclass
@@ -85,6 +86,11 @@ class Telemetry:
     roll: float = 0.0                # degres
     static_pressure: float = 0.0     # Pa
     atmosphere_density: float = 0.0  # kg/m3
+    # Plafond de l'air du corps survole, 0 s'il n'a pas d'atmosphere. Expose
+    # ici parce que la veille et le dashboard en ont besoin pour dire si une
+    # orbite est sure : une periapside a 60 km est confortable autour de la
+    # Mun et condamnee autour de Kerbin.
+    atmosphere_depth: float = 0.0    # m
 
     # --- propulsion ---
     throttle: float = 0.0            # 0..1
@@ -110,6 +116,12 @@ class Telemetry:
     # --- aide a la navigation ---
     # Ce que ferait un pilote automatique, affiche plutot qu'execute.
     guidage: Guidage | None = None
+
+    # --- veille de bord ---
+    # Tendances observees sur les echantillons precedents : reserve
+    # electrique, tenue de la periapside. Rempli par le hub, pas par la
+    # source, parce que le calcul ne depend pas de l'origine des donnees.
+    veille: Veille | None = None
 
     # --- liaison ---
     # comm_available distingue "CommNet desactive ou vaisseau sans antenne"

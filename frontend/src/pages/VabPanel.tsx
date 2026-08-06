@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { Panel, Stat } from "../components/ui";
 import * as f from "../format";
+import { apiUrl } from "../api";
 
 interface EtageVab {
   number: number;
@@ -25,11 +26,6 @@ interface Vaisseau {
   etages: EtageVab[];
   ressources: { nom: string; quantite: number; masse: number }[];
   avertissements: string[];
-}
-
-function apiUrl(path: string): string {
-  const host = location.port === "5173" ? `${location.hostname}:8000` : location.host;
-  return `${location.protocol}//${host}${path}`;
 }
 
 export function VabPanel({ atelier }: { atelier: string }) {

@@ -2,11 +2,16 @@ import { AttitudeIndicator } from "../components/AttitudeIndicator";
 import { NavigationPanel } from "../components/NavigationPanel";
 import { OrbitDiagram } from "../components/OrbitDiagram";
 import { RadioPanel } from "../components/RadioPanel";
+import { SciencePanel } from "../components/SciencePanel";
 import { Bar, Panel, Stat } from "../components/ui";
 import * as f from "../format";
 import type { Telemetry } from "../types";
 
 export function FlightPage({ t }: { t: Telemetry }) {
+  const veille = t.veille;
+  const elec = veille?.electrique;
+  const pe = veille?.periapside;
+
   return (
     <div className="dashboard trois">
       {/* ---------------- Pilotage ---------------- */}
@@ -55,21 +60,35 @@ export function FlightPage({ t }: { t: Telemetry }) {
               <OrbitDiagram orbit={t.orbit} altitude={t.altitude} />
               <div style={{ marginTop: "0.6rem" }}>
                 <Stat label="Apoapside" value={f.distance(t.orbit.apoapsis)} tone="accent" />
+                {/* Le seuil dépend du corps survolé : 70 km autour de Kerbin,
+                    mais le sol autour de la Mun. Le mesurer plutôt que de le
+                    fixer en dur évite de crier au danger en orbite basse
+                    lunaire. */}
                 <Stat
                   label="Périapside"
                   value={f.distance(t.orbit.periapsis)}
-                  tone={t.orbit.periapsis < 70000 ? "alert" : "good"}
+                  tone={t.orbit.periapsis < t.atmosphere_depth ? "alert" : "good"}
                 />
                 <Stat label="Temps → Ap" value={f.duration(t.orbit.time_to_apoapsis)} />
                 <Stat label="Temps → Pe" value={f.duration(t.orbit.time_to_periapsis)} />
                 <Stat label="Excentricité" value={f.num(t.orbit.eccentricity, 4)} />
                 <Stat label="Inclinaison" value={`${f.num(t.orbit.inclination, 2)}°`} />
               </div>
+
+              {pe?.surveillee && pe.message && (
+                <p className={`veille-ligne ${pe.critique ? "critique" : ""}`}>
+                  {pe.message}
+                </p>
+              )}
             </>
           ) : (
             <div className="empty">Pas de données orbitales</div>
           )}
         </Panel>
+
+        {/* Ne s'affiche que s'il y a vraiment des données à bord : sinon il
+            prendrait de la place pour dire « rien ». */}
+        <SciencePanel />
 
         <RadioPanel />
       </div>
@@ -109,6 +128,14 @@ export function FlightPage({ t }: { t: Telemetry }) {
             ))
           ) : (
             <div className="empty">Aucune ressource détectée</div>
+          )}
+
+          {/* La projection compte plus que le niveau : c'est le rythme de
+              décharge, pas le pourcentage restant, qui dit s'il faut agir. */}
+          {elec?.suivie && elec.message && (
+            <p className={`veille-ligne ${elec.critique ? "critique" : ""}`}>
+              {elec.message}
+            </p>
           )}
         </Panel>
 

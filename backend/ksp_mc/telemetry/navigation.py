@@ -232,7 +232,11 @@ def _consigne(g: Guidage, t, atmosphere: float) -> str:
 
 
 def _alerter(g: Guidage, t) -> None:
-    if t.twr < 1.0 and g.phase in ("au sol", "ascension"):
+    # Tant qu'aucun moteur n'est allume, la poussee disponible vaut zero et le
+    # TWR aussi. Ce n'est pas un defaut de conception, c'est un lanceur qui
+    # attend la mise a feu : sur le pas de tir, l'alerte se declenchait avant
+    # meme le premier etagement. On ne juge le TWR qu'une fois qu'il existe.
+    if 0 < t.twr < 1.0 and g.phase in ("au sol", "ascension"):
         g.alertes.append(
             f"TWR de {t.twr:.2f} : insuffisant pour monter, il en faut plus de 1."
         )

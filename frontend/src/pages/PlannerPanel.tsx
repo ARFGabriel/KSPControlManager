@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { TransferDiagram, type Geometrie } from "../components/TransferDiagram";
 import { Panel, Stat } from "../components/ui";
 import * as f from "../format";
+import { getJson } from "../api";
+import { useRappels } from "../useRappels";
 
 interface PlannerBody {
   name: string;
@@ -29,8 +31,27 @@ interface Fenetre {
   angle_vise?: number;
   attente?: number;
   note?: string;
+  ut_depart?: number;
+  periode_synodique?: number;
   date_depart?: { texte: string };
   date_actuelle?: { texte: string };
+}
+
+/** Recoupement entre la fusée du moment et ce que le trajet exige. */
+interface Confrontation {
+  disponible: boolean;
+  raison?: string;
+  source?: "vab" | "vol";
+  vaisseau?: string;
+  delta_v_disponible: number;
+  delta_v_requis: number;
+  marge: number;
+  marge_relative: number;
+  suffisant: boolean;
+  etapes_ignorees: string[];
+  etape_bloquante: { titre: string; delta_v: number; restant: number } | null;
+  suggestion: string;
+  verdict: string;
 }
 
 interface PlanResult {
@@ -44,6 +65,7 @@ interface PlanResult {
   duree_totale: number;
   fenetre: Fenetre | null;
   geometrie: Geometrie | null;
+  confrontation: Confrontation | null;
 }
 
 const COULEURS: Record<string, string> = {
@@ -53,11 +75,6 @@ const COULEURS: Record<string, string> = {
   evasion: "var(--amber)",
   descente: "var(--red)",
 };
-
-function apiUrl(path: string): string {
-  const host = location.port === "5173" ? `${location.hostname}:8000` : location.host;
-  return `${location.protocol}//${host}${path}`;
-}
 
 export function PlannerPanel() {
   const [corps, setCorps] = useState<PlannerBody[]>([]);
@@ -69,23 +86,23 @@ export function PlannerPanel() {
   const [escale, setEscale] = useState("");
   const [escales, setEscales] = useState<{ nom: string; corps: string }[]>([]);
   const [plan, setPlan] = useState<PlanResult | null>(null);
+  const { rappels, poser } = useRappels();
 
   // Escales possibles : les engins déjà en orbite autour du corps de départ.
   useEffect(() => {
-    fetch(apiUrl("/api/planner/cibles"))
-      .then((r) => r.json())
-      .then((d) => setEscales(d.cibles ?? []))
-      .catch(() => setEscales([]));
+    getJson<{ cibles?: { nom: string; corps: string }[] }>(
+      "/api/planner/cibles",
+    ).then((d) => setEscales(d?.cibles ?? []));
   }, []);
 
   useEffect(() => {
-    fetch(apiUrl("/api/planner/bodies"))
-      .then((r) => r.json())
-      .then((d) => {
-        setCorps(d.bodies ?? []);
-        setSource(d.source ?? "");
-      })
-      .catch(() => undefined);
+    getJson<{ bodies?: PlannerBody[]; source?: string }>(
+      "/api/planner/bodies",
+    ).then((d) => {
+      if (!d) return;
+      setCorps(d.bodies ?? []);
+      setSource(d.source ?? "");
+    });
   }, []);
 
   useEffect(() => {
@@ -97,11 +114,13 @@ export function PlannerPanel() {
       vers_surface: String(versSurface),
     });
     if (escale) params.set("escale", escale);
-    fetch(apiUrl(`/api/planner/plan?${params}`))
-      .then((r) => r.json())
-      .then(setPlan)
-      .catch(() => setPlan(null));
+    getJson<PlanResult>(`/api/planner/plan?${params}`).then(setPlan);
   }, [depart, arrivee, depuisSurface, versSurface, escale]);
+
+  // Une fenêtre déjà suivie ne se repropose pas : le bouton devient un état.
+  const dejaRappele = (rappels?.rappels ?? []).some(
+    (r) => r.depart === depart && r.arrivee === arrivee,
+  );
 
   // Toute destination du système est atteignable : l'itinéraire se charge
   // d'enchaîner les étapes intermédiaires.
@@ -196,6 +215,10 @@ export function PlannerPanel() {
             tone="big"
           />
 
+          {/* Le recoupement avec la fusée du moment : c'est ce chiffre-là qui
+              dit si le plan est réalisable, pas le total seul. */}
+          <ConfrontationBloc c={plan.confrontation} />
+
           {/* Fenêtre de tir : uniquement quand le jeu fournit les positions. */}
           {plan.fenetre?.date_depart && (
             <div className="planner-fenetre">
@@ -206,6 +229,21 @@ export function PlannerPanel() {
                 phase {f.num(plan.fenetre.angle_actuel ?? 0, 1)}° →{" "}
                 {f.num(plan.fenetre.angle_vise ?? 0, 1)}°
               </div>
+              <button
+                type="button"
+                className="planner-rappel"
+                disabled={dejaRappele}
+                onClick={() =>
+                  poser({
+                    depart,
+                    arrivee,
+                    ut_depart: plan.fenetre!.ut_depart ?? 0,
+                    periode_synodique: plan.fenetre!.periode_synodique ?? 0,
+                  })
+                }
+              >
+                {dejaRappele ? "✓ rappel posé" : "Me le rappeler"}
+              </button>
             </div>
           )}
 
@@ -264,5 +302,54 @@ export function PlannerPanel() {
         </>
       )}
     </Panel>
+  );
+}
+
+/**
+ * Le chaînon manquant entre les deux outils : la fusée que tu as face au
+ * trajet que tu vises. Le backend a déjà tranché et rédigé le verdict — ici
+ * on ne fait que le mettre en forme.
+ */
+function ConfrontationBloc({ c }: { c: Confrontation | null }) {
+  if (!c) return null;
+
+  if (!c.disponible) {
+    return <p className="confront-vide">{c.raison}</p>;
+  }
+
+  const ton = !c.suffisant ? "manque" : c.marge_relative < 0.1 ? "juste" : "ok";
+  const origine =
+    c.source === "vab" ? "vaisseau en construction" : "vaisseau en vol";
+
+  return (
+    <div className={`confront ${ton}`}>
+      <div className="entete">
+        <span className="titre">Fusée vs mission</span>
+        <span className="origine">
+          {c.vaisseau} · {origine}
+        </span>
+      </div>
+
+      <div className="jauge">
+        {/* La barre compare directement les deux réserves : au-delà de 100 %
+            du besoin, le dépassement est la marge. */}
+        <div
+          className="fill"
+          style={{
+            width: `${Math.min(100, (c.delta_v_disponible / Math.max(c.delta_v_requis, 1)) * 100)}%`,
+          }}
+        />
+      </div>
+
+      <p className="verdict">{c.verdict}</p>
+
+      {c.suggestion && <p className="suggestion">{c.suggestion}</p>}
+
+      {c.etapes_ignorees.length > 0 && (
+        <p className="note">
+          Déjà accompli, non recompté : {c.etapes_ignorees.join(", ")}.
+        </p>
+      )}
+    </div>
   );
 }

@@ -1,3 +1,4 @@
+import { BandeauAlertes } from "./components/BandeauAlertes";
 import { Badge } from "./components/ui";
 import * as f from "./format";
 import { FlightPage } from "./pages/FlightPage";
@@ -8,6 +9,7 @@ import {
   TrackingPage,
 } from "./pages/SimplePages";
 import type { Telemetry } from "./types";
+import { useRappels } from "./useRappels";
 import { useTelemetry } from "./useTelemetry";
 
 /** Libellé de la scène, affiché en haut. */
@@ -22,6 +24,10 @@ const SCENES: Record<string, string> = {
 
 export default function App() {
   const { telemetry, online } = useTelemetry();
+  // Les rappels de fenêtre de tir vivent ici, et non dans le planificateur :
+  // une fenêtre qui approche doit se signaler quelle que soit la scène où
+  // l'on se trouve, y compris en plein vol.
+  const { rappels, retirer } = useRappels();
 
   return (
     <div className="app">
@@ -33,6 +39,12 @@ export default function App() {
           qu'il répondra.
         </div>
       )}
+
+      <BandeauAlertes
+        t={telemetry}
+        rappels={rappels?.a_signaler ?? []}
+        onRetirer={retirer}
+      />
 
       {choisirPage(telemetry)}
     </div>

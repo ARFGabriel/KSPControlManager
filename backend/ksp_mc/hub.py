@@ -20,6 +20,7 @@ from .telemetry.krpc_source import KrpcSource
 from .telemetry.schema import Telemetry
 from .telemetry.sim_source import SimSource
 from .telemetry.source import TelemetrySource
+from .telemetry.veille import veilleur
 
 log = logging.getLogger("ksp_mc.hub")
 
@@ -153,10 +154,16 @@ class TelemetryHub:
                 # asyncio pour ne pas figer le serveur web.
                 await asyncio.to_thread(self._maybe_upgrade_to_krpc)
                 if self.source is not None:
-                    self.latest = await asyncio.to_thread(self.source.sample)
+                    sample = await asyncio.to_thread(self.source.sample)
+                    # La veille se nourrit de la suite des echantillons : elle
+                    # a sa place ici, ou passent tous les echantillons, quelle
+                    # que soit la source qui les a produits.
+                    sample.veille = veilleur.observer(sample)
+                    self.latest = sample
                     self._broadcast(self.latest.to_dict())
             except Exception as exc:
                 log.exception("Erreur dans la boucle de telemetrie")
+                veilleur.reinitialiser()
                 self.latest = Telemetry(connected=False, error=str(exc))
                 self._broadcast(self.latest.to_dict())
                 # Une source cassee (jeu ferme en plein vol) doit repartir

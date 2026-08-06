@@ -35,13 +35,14 @@ export function ut(seconds: number): string {
 export function joursKerbals(seconds: number): string {
   if (!isFinite(seconds) || seconds <= 0) return "—";
   const jours = seconds / JOUR_KERBAL;
-  if (jours < 1) return `${(seconds / 3600).toFixed(1)} h`;
+  // num() plutôt que toFixed() : la virgule décimale et le séparateur de
+  // milliers, comme dans le reste du tableau de bord.
+  if (jours < 1) return `${num(seconds / 3600, 1)} h`;
   // En dessous de dix jours, l'arrondi à l'entier fait perdre trop
   // d'information : un transfert vers la Mun dure 1,2 jour, pas « 1 jours ».
-  if (jours < 10) return `${jours.toFixed(1)} jours`;
-  if (jours < 426) return `${jours.toFixed(0)} jours`;
-  const annees = jours / 426;
-  return `${annees.toFixed(1)} années (${jours.toFixed(0)} j)`;
+  if (jours < 10) return `${num(jours, 1)} jours`;
+  if (jours < 426) return `${num(jours, 0)} jours`;
+  return `${num(jours / 426, 1)} années (${num(jours, 0)} j)`;
 }
 
 /** Numéro de jour depuis le début du programme. */

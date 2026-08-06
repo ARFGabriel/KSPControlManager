@@ -45,6 +45,36 @@ export interface Guidage {
   alertes: string[];
 }
 
+export interface ReserveElectrique {
+  suivie: boolean;
+  charge: number;
+  maximum: number;
+  fraction: number;
+  /** Unités par seconde de jeu ; négatif quand la batterie se vide. */
+  flux: number;
+  secondes_restantes: number;
+  secondes_plein: number;
+  message: string;
+  critique: boolean;
+}
+
+export interface PeriapsideVeille {
+  surveillee: boolean;
+  altitude: number;
+  plancher: number;
+  derive: number;
+  sous_le_plancher: boolean;
+  temps_avant: number;
+  message: string;
+  critique: boolean;
+}
+
+export interface Veille {
+  electrique: ReserveElectrique;
+  periapside: PeriapsideVeille;
+  alertes: string[];
+}
+
 export interface Telemetry {
   connected: boolean;
   source: string;
@@ -72,6 +102,8 @@ export interface Telemetry {
   roll: number;
   static_pressure: number;
   atmosphere_density: number;
+  /** Plafond de l'air du corps survolé, 0 s'il n'en a pas. */
+  atmosphere_depth: number;
 
   throttle: number;
   thrust: number;
@@ -89,6 +121,7 @@ export interface Telemetry {
   resources: ResourceInfo[];
   orbit: OrbitInfo | null;
   guidage: Guidage | null;
+  veille: Veille | null;
 
   comm_available: boolean;
   comm_can_communicate: boolean;

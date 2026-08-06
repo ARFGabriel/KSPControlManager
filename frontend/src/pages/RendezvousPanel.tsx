@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { Panel, Stat } from "../components/ui";
 import * as f from "../format";
+import { apiUrl } from "../api";
 
 interface Cible {
   nom: string;
@@ -37,11 +38,6 @@ interface PlanRdv {
   angle_vise: number;
   etapes: EtapeRdv[];
   avertissements: string[];
-}
-
-function apiUrl(path: string): string {
-  const host = location.port === "5173" ? `${location.hostname}:8000` : location.host;
-  return `${location.protocol}//${host}${path}`;
 }
 
 export function RendezvousPanel() {
