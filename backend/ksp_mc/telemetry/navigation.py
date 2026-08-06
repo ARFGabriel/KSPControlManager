@@ -186,6 +186,12 @@ def _isp(t) -> float:
 
 def _consigne(g: Guidage, t, atmosphere: float) -> str:
     if g.noeud:
+        # Une duree nulle ne veut pas dire instantane : elle veut dire qu'il
+        # n'y a rien pour pousser. Le dire, plutot que d'annoncer une
+        # manoeuvre irrealisable comme si elle allait de soi.
+        if g.noeud_duree <= 0:
+            return (f"Manoeuvre de {g.noeud_delta_v:.0f} m/s prevue dans "
+                    f"{_duree(g.noeud_temps)}, mais aucune poussee disponible.")
         if g.noeud_allumage > 5:
             return (f"Manoeuvre dans {_duree(g.noeud_temps)} : allumage dans "
                     f"{_duree(g.noeud_allumage)}, {g.noeud_duree:.0f} s de poussee.")
